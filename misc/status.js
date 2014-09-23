@@ -5,7 +5,9 @@ var Status = (function() {
       robots[id] = {
         robotFound: false,
         idleCount: 0,
-        direction: 1
+        direction: 1,
+        turnDirection: 1,
+        initialize: false
       };
     }
     return robots[id];
