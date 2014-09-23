@@ -13,7 +13,7 @@ var Radar = {
     var dy = me.arenaHeight; // farthest point
     var target;
     for (e in Radar.robots) {
-      me.log(Utils.formatMessage('Radar.search', 'dx=' + dx + ',dy=' + dy));
+      me.log(Utils.formatLog('Radar.search', 'dx=' + dx + ',dy=' + dy));
       target = Radar.robots[e];
       ePos = target.position;
       if (dx > Math.abs(mPos.x - ePos.x) || dy > Math.abs(mPos.y - ePos.y)) {

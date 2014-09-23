@@ -9,7 +9,7 @@ var Utils = {
       return false;
     }
   },
-  formatMessage: function(context, message) {
+  formatLog: function(context, message) {
     return '[' + context + '] ' + message;
   }
 };
