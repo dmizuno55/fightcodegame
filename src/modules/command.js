@@ -2,17 +2,9 @@ var Command = {
   trace: function(me, target) {
     var mPos = me.position;
     var tPos = target.position;
-    var dirX = tPos.x > mPos.x ? 1 : -1;
-    var dirY = tPos.y > mPos.y ? 1 : -1;
-    if (dirX > 0 && dirY < 0) {
-      Command.turnTo(me, 45);
-    } else if (dirX < 0 && dirY < 0) {
-      Command.turnTo(me, 135);
-    } else if (dirX < 0 && dirY > 0) {
-      Command.turnTo(me, 225);
-    } else if (dirX < 0 && dirY < 0) {
-      Command.turnTo(me, 315);
-    }
+    var dir = Math.atan2(Math.abs(tPos.y - mPos.y), Math.abs(tPos.x - mPos.x)) * 180 / Math.PI;
+    var absoluteDir = dir > 0 ? 360 - dir : 360 + dir;
+    Command.turnTo(me, absoluteDir);
     me.log(Utils.formatLog('Command.trace', 'angle=' + me.angle));
   },
   go: function(robot, distance) {
@@ -27,12 +19,12 @@ var Command = {
     Command.turnTo(robot.turn(absoluteDir));
     robot.ahead(length);
   },
-  turnTo: function(robot, direction) {
+  turnTo: function(robot, degrees) {
     robot.log(Utils.formatLog('Command.turnTo', 'before angle=' + robot.angle));
-    if (robot.angle > direction) {
-      robot.turn(-1 * (robot.angle - direction));
+    if (robot.angle > degrees) {
+      robot.turn(robot.angle - degrees);
     } else {
-      robot.turn(direction - robot.angle);
+      robot.turn(degrees - robot.angle);
     }
     robot.log(Utils.formatLog('Command.turnTo', 'after angle=' + robot.angle));
   }

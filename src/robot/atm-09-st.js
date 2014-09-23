@@ -23,8 +23,13 @@ Robot.prototype.onIdle = function(ev) {
   }
 
   if (!status.robotFound) {
-    robot.move(10, status.direction);
-    robot.turn(1);
+    var target = Radar.search(robot);
+    if (target) {
+      Command.trace(robot, target);
+    } else {
+      robot.move(10, status.direction);
+      robot.turn(1);
+    }
   }
   robot.log(Utils.formatLog('Robot.onIdle', 'Status=' + Status.dump()));
 };
@@ -39,6 +44,8 @@ Robot.prototype.onScannedRobot = function(ev) {
   var status = Status.get(robot.id);
   status.robotFound = true;
   status.idleCount = 0;
+
+  Radar.mark(target);
 
   robot.log(Utils.formatLog('Robot.onScannedRobot', 'id=' + robot.id));
   var i, dir, slide;
