@@ -1,30 +1,6 @@
+
 //FightCode can only understand your robot
 //if its class is called Robot
-var Radar = {
-  robots: {},
-  mark: function(robot) {
-    Radar.robots[robot.id] = robot;
-  },
-  search: function(me) {
-    var mPos = me.position;
-    var e, ePos, enemy;
-    var dx = me.arenaWidth; // farthest point
-    var dy = me.arenaHeight; // farthest point
-    var target;
-    for (e in Radar.robots) {
-      me.log('dx=' + dx + ',dy=' + dy);
-      target = Radar.robots[e];
-      ePos = target.position;
-      if (dx > Math.abs(mPos.x - ePos.x) || dy > Math.abs(mPos.y - ePos.y)) {
-        dx = Math.abs(mPos.x - ePos.x);
-        dy = Math.abs(mPos.y - ePos.y);
-        enemy = target;
-      }
-    }
-    return enemy;
-  }
-};
-
 var Utils = {
   isClone: function(robot) {
     return robot.parentId !== null;
@@ -36,141 +12,150 @@ var Utils = {
       return false;
     }
   },
+  formatMessage: function(context, message) {
+    return '[' + context + '] ' + message;
+  }
+};
+
+var Command = {
   trace: function(me, target) {
     var mPos = me.position;
     var tPos = target.position;
     var dirX = tPos.x > mPos.x ? 1 : -1;
     var dirY = tPos.y > mPos.y ? 1 : -1;
     if (dirX > 0 && dirY < 0) {
-      Utils.turnTo(me, 45);
+      Command.turnTo(me, 45);
     } else if (dirX < 0 && dirY < 0) {
-      Utils.turnTo(me, 135);
+      Command.turnTo(me, 135);
     } else if (dirX < 0 && dirY > 0) {
-      Utils.turnTo(me, 225);
+      Command.turnTo(me, 225);
     } else if (dirX < 0 && dirY < 0) {
-      Utils.turnTo(me, 315);
+      Command.turnTo(me, 315);
     }
-    me.log('angle=' + me.angle);
+    me.log(Utils.formatMessage('Command.trace', 'angle=' + me.angle));
   },
   go: function(robot, distance) {
     var curPos = robot.position;
-//    var dir = Math.atan2(curPos.y - distance.y, curPos.x - distance.y) * 180 / Math.PI;
-//    Utils.turnTo(robot, dir);
-//    var length = Math.sqrt(Math.pow(curPos.y - distance.y, 2) + Math.pow(curPos.x - distance.x, 2));
-//    robot.ahead(length);
-
-    if (!(curPos.x < (distance.x + 10) && curPos.x > (distance.x - 10))) {
-      Utils.turnTo(robot, 90);
-      if (curPos.x < distance.x) {
-        robot.ahead(distance.x - curPos.x);
-      } else {
-        robot.back(curPos.x - distance.x);
-      }
-    }
-    if (!(curPos.y < (distance.y + 10) && curPos.y > (distance.y - 10))) {
-      Utils.turnTo(robot, 180);
-      if (curPos.y < distance.y) {
-        robot.ahead(distance.y - curPos.y);
-      } else {
-        robot.back(curPos.y - distance.y);
-      }
-    }
+    var dir = Math.atan2(Math.abs(distance.y - curPos.y), Math.abs(distance.x - curPos.x)) * 180 / Math.PI;
+    robot.log(Utils.formatMessage('Command.go', 'c.x=' + curPos.x + ',c.y=' + curPos.y + ',angle=' + robot.angle));
+    robot.log(Utils.formatMessage('Command.go', 'd.x=' + distance.x + ',d.y=' + distance.y));
+    robot.log(Utils.formatMessage('Command.go', 'dir=' + dir));
+    var length = Math.sqrt(Math.pow(curPos.y - distance.y, 2) + Math.pow(curPos.x - distance.x, 2));
+    var absoluteDir = dir > 0 ? 360 - dir : 360 + dir;
+    robot.log(Utils.formatMessage('Command.go', 'absoluteDir=' + absoluteDir));
+    Command.turnTo(robot.turn(absoluteDir));
+    robot.ahead(length);
   },
-  turnTo: function(robot, direction) {
-    robot.log('before angle=' + robot.angle);
-    if (robot.angle > direction) {
-      robot.turn(-1 * (robot.angle - direction));
+  turnTo: function(robot, directionion) {
+    robot.log(Utils.formatMessage('Command.turnTo', 'before angle=' + robot.angle));
+    if (robot.angle > directionion) {
+      robot.turn(-1 * (robot.angle - directionion));
     } else {
-      robot.turn(direction - robot.angle);
+      robot.turn(directionion - robot.angle);
     }
-    robot.log('after angle=' + robot.angle);
+    robot.log(Utils.formatMessage('Command.turnTo', 'after angle=' + robot.angle));
   }
 };
 
+var Status = (function() {
+  var robots = {};
+  function get(id) {
+    if (!robots[id]) {
+      robots[id] = {
+        robotFound: false,
+        idleCount: 0,
+        direction: 1
+      };
+    }
+    return robots[id];
+  }
+  function dump() {
+    return JSON.stringify(robots);
+  }
+  return {
+    get: get,
+    dump: dump
+  }
+})();
+
 var Robot = function(robot) {
-//  robot.ignore('onScannedRobot');
-//  robot.ignore('onHitByBullet');
-  this.robotFound = false;
   robot.clone();
 };
 
 Robot.prototype.onIdle = function(ev) {
   var robot = ev.robot;
-//  robot.log('onIdle');
-  if (Utils.isClone(robot)) {
-    var center = {'x': (robot.arenaWidth / 2), 'y': (robot.arenaHeight / 2)};
-    Utils.go(robot, center);
-    robot.turn(1);
-    return;
+  var status = Status.get(robot.id);
+  status.idleCount++;
+  if (status.idleCount > 50) {
+    status.robotFound = false;
   }
-  var enemy = Radar.search(robot);
-  if (enemy) {
-    robot.log('find enemy');
-    Utils.go(robot, enemy.position);
-  } else {
-    robot.log('not find');
-  }
-//  robot.rotateCannon(1);
 
-//  if (!this.robotFound) {
-//    robot.turn(1);
-//  } else {
-//    robot.ahead(50);
-//    robot.back(50);
-//  }
-//  robot.ahead(10);
+  if (robot.cannonRelativeAngle !== 180) {
+    robot.log(Utils.formatMessage('Robot.onIdle', 'init'));
+    robot.rotateCannon(180 - robot.cannonRelativeAngle);
+    if (Utils.isClone(robot)) {
+      status.direction = -1;
+    } else {
+      status.direction = 1;
+    }
+  }
+
+  if (!status.robotFound) {
+    robot.move(10, status.direction);
+    robot.turn(1);
+  }
+  robot.log(Utils.formatMessage('Robot.onIdle', 'Status=' + Status.dump()));
 };
 
 Robot.prototype.onScannedRobot = function(ev) {
   var robot = ev.robot;
   var target = ev.scannedRobot;
-//  this.robotFound = true;
-  if (Utils.isClone(robot)) {
-    if (!Utils.isBuddy(robot, target)) {
-      Radar.mark(target);
-      robot.fire();
-    }
+  if (Utils.isBuddy(robot, target)) {
     return;
   }
 
-  robot.log('id=' + robot.id);
-  if (!Utils.isBuddy(robot, target)) {
-    Radar.mark(target);
-    var i;
-//    robot.stop();
-    for (i = 0; i < 5; i++) {
-      robot.fire();
-//      robot.rotateCannon(i % 2 === 0 ? 5 : -5);
+  var status = Status.get(robot.id);
+  status.robotFound = true;
+  status.idleCount = 0;
+
+  robot.log(Utils.formatMessage('Robot.onScannedRobot', 'id=' + robot.id));
+  var i, dir, slide;
+  for (i = 0; i < 5; i++) {
+    if (i % 2 === 0) {
+      dir = 1;
+      slide = 1
+    } else {
+      dir = -1;
+      slide = 0;
     }
-  } else {
-//    robot.turn(10);
+    robot.fire();
+    robot.move(5 + slide, dir);
+    if (slide > 0) {
+      robot.rotateCannon(slide);
+    }
   }
-  robot.ahead(10);
 };
 
 Robot.prototype.onRobotCollision = function(ev) {
   var robot = ev.robot;
-  if (Utils.isClone(robot)) {
-    return;
+  robot.log(Utils.formatMessage('Robot.onRobotCollision', 'bearing=' + ev.bearing));
+  if ((ev.bearing <= 30 && ev.bearing >= 0) || (ev.bearing >= -30 && ev.bearing <= 0)) {
+    robot.back(100);
+  } else if ((ev.bearing >= 150 && ev.bearing <= 180) || (ev.bearing <= -150 && ev.bearing >= -180)) {
+    robot.ahead(100);
   }
-  robot.turn(ev.bearing);
-  robot.back(100);
+  robot.turn(ev.bearing - 90);
 };
 
 Robot.prototype.onHitByBullet = function(ev) {
   var robot = ev.robot;
-  if (Utils.isClone(robot)) {
-    return;
-  }
-  robot.log('onHitByBullet: bearing=' + ev.bearing);
-  robot.turn(ev.bearing);
-//  robot.back(50);
+  var status = Status.get(robot.id);
+  robot.log(Utils.formatMessage('Robot.onHitByBullet', 'bearing=' + ev.bearing));
+  robot.turn(ev.bearing - 90);
+
 };
 
 Robot.prototype.onWallCollision = function(ev) {
   var robot = ev.robot;
-  var before = robot.angle;
-//  var bearing = ev.bearing === 0 ? 90 : ev.bearing;
-  robot.turn(90 + bearing);
-  robot.log('before=' + before + ',after=' + robot.angle + ',bearing=' + ev.bearing);
+  robot.turn(90 + ev.bearing);
 };

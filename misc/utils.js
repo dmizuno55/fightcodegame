@@ -8,5 +8,8 @@ var Utils = {
     } else {
       return false;
     }
+  },
+  formatMessage: function(context, message) {
+    return '[' + context + '] ' + message;
   }
-}
+};
