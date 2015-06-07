@@ -3,12 +3,13 @@ var Robot = function(robot) {
 };
 
 Robot.prototype.onIdle = function(ev) {
+  var command = toolkit.ns('command');
   var robot = ev.robot;
   if (robot.cannonRelativeAngle !== 180) {
     robot.rotateCannon(90);
   }
 
-  Command.turnTo(robot, 90);
+  command.turnTo(robot, 90);
 };
 
 Robot.prototype.onScannedRobot = function(ev) {
@@ -20,8 +21,9 @@ Robot.prototype.onScannedRobot = function(ev) {
 };
 
 Robot.prototype.onWallCollision = function(ev) {
+  var utils = toolkit.ns('utils');
   var robot = ev.robot;
-  if (Utils.isClone(robot)) {
+  if (utils.isClone(robot)) {
     if (robot.angle === 0 || robot.angle === 180) {
       robot.turn(ev.bearing);
       robot.move(robot.arenaHeight, this.direction);

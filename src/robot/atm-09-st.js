@@ -5,49 +5,63 @@ var Robot = function(robot) {
 };
 
 Robot.prototype.onIdle = function(ev) {
+  // load toolkit
+  var status = toolkit.ns('status'),
+      utils = toolkit.ns('utils'),
+      radar = toolkit.ns('radar'),
+      command = toolkit.ns('command');
+
   var robot = ev.robot;
-  var status = Status.get(robot.id);
-  status.idleCount++;
-  if (status.idleCount > 50) {
-    status.robotFound = false;
+  var sts = status.get(robot.id);
+  var log = utils.logger('Robot.onIdle', robot);
+
+  sts.idleCount++;
+  if (sts.idleCount > 50) {
+    sts.robotFound = false;
   }
 
   if (robot.cannonRelativeAngle !== 180) {
-    robot.log(Utils.formatLog('Robot.onIdle', 'init'));
+    log('init');
     robot.rotateCannon(180 - robot.cannonRelativeAngle);
-    if (Utils.isClone(robot)) {
-      status.direction = -1;
+    if (utils.isClone(robot)) {
+      sts.direction = -1;
     } else {
-      status.direction = 1;
+      sts.direction = 1;
     }
   }
 
-  if (!status.robotFound) {
-    var target = Radar.search(robot);
+  if (!sts.robotFound) {
+    var target = radar.search(robot);
     if (target) {
-      Command.trace(robot, target);
+      command.trace(robot, target);
     } else {
-      robot.move(10, status.direction);
+      robot.move(10, sts.direction);
       robot.turn(1);
     }
   }
-  robot.log(Utils.formatLog('Robot.onIdle', 'Status=' + Status.dump()));
+  log('Status=' + status.dump());
 };
 
 Robot.prototype.onScannedRobot = function(ev) {
+  var status = toolkit.ns('status'),
+      utils = toolkit.ns('utils'),
+      radar = toolkit.ns('radar');
+
   var robot = ev.robot;
   var target = ev.scannedRobot;
-  if (Utils.isBuddy(robot, target)) {
+  var log = utils.logger('Robot.onScannedRobot', robot);
+  var sts = status.get(robot.id);
+
+  if (utils.isBuddy(robot, target)) {
     return;
   }
 
-  var status = Status.get(robot.id);
-  status.robotFound = true;
-  status.idleCount = 0;
+  sts.robotFound = true;
+  sts.idleCount = 0;
 
-  Radar.mark(target);
+  radar.mark(target);
 
-  robot.log(Utils.formatLog('Robot.onScannedRobot', 'id=' + robot.id));
+  log('id=' + robot.id);
   var i, dir, slide;
   for (i = 0; i < 5; i++) {
     if (i % 2 === 0) {
@@ -66,8 +80,12 @@ Robot.prototype.onScannedRobot = function(ev) {
 };
 
 Robot.prototype.onRobotCollision = function(ev) {
+  var utils = toolkit.ns('utils');
+
   var robot = ev.robot;
-  robot.log(Utils.formatLog('Robot.onRobotCollision', 'bearing=' + ev.bearing));
+  var log = utils.logger('Robot.onRobotCollision', robot);
+
+  log('bearing=' + ev.bearing);
   if ((ev.bearing <= 30 && ev.bearing >= 0) || (ev.bearing >= -30 && ev.bearing <= 0)) {
     robot.back(100);
   } else if ((ev.bearing >= 150 && ev.bearing <= 180) || (ev.bearing <= -150 && ev.bearing >= -180)) {
@@ -77,11 +95,13 @@ Robot.prototype.onRobotCollision = function(ev) {
 };
 
 Robot.prototype.onHitByBullet = function(ev) {
-  var robot = ev.robot;
-  var status = Status.get(robot.id);
-  robot.log(Utils.formatLog('Robot.onHitByBullet', 'bearing=' + ev.bearing));
-  robot.turn(ev.bearing - 90);
+  var utils = toolkit.ns('utils');
 
+  var robot = ev.robot;
+  var log = utils.logger('Robot.onHitByBullet', robot);
+
+  log('bearing=' + ev.bearing);
+  robot.turn(ev.bearing - 90);
 };
 
 Robot.prototype.onWallCollision = function(ev) {
