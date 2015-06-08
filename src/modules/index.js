@@ -78,6 +78,10 @@ var toolkit = toolkit || {};
     status.dump = function() {
       return JSON.stringify(robots);
     };
+
+    status.clear = function() {
+      robots = {};
+    };
   })(status);
 
   /**

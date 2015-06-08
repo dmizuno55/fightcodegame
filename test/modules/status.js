@@ -2,9 +2,12 @@ var assert = require('power-assert');
 
 describe('status', function() {
   var status = toolkit.ns('status');
-  before(function() {
+  beforeEach(function() {
     var sts = status.get('hoge');
     sts.robotFound = true;
+  });
+  afterEach(function() {
+    status.clear();
   });
 
   it('get hoge status', function() {
@@ -18,5 +21,7 @@ describe('status', function() {
   });
 
   it('dump status', function() {
+    var dump = status.dump();
+    assert.deepEqual(dump, '{"hoge":{"robotFound":true,"idleCount":0,"direction":1,"turnDirection":1,"initialize":false}}');
   });
 });
