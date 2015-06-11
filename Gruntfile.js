@@ -3,11 +3,11 @@ module.exports = function(grunt) {
     pkg: grunt.file.readJSON('package.json'),
     concat: {
       atm09st: {
-        src: ['src/robot/atm-09-st.js', 'src/modules/index.js'],
+        src: ['src/modules/index.js', 'src/robot/atm-09-st.js'],
         dest: 'dist/atm-09-st.js'
       },
       crisscross: {
-        src: ['src/robot/crisscross.js', 'src/modules/index.js'],
+        src: ['src/modules/index.js', 'src/robot/crisscross.js'],
         dest: 'dist/crisscross.js'
       }
     },

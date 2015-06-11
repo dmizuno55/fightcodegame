@@ -5,7 +5,8 @@ var Robot = function(robot) {
 };
 
 Robot.prototype.onIdle = function(ev) {
-  // load toolkit
+  // load toolkitk
+  toolkit.ns('clock').tick();
   var status = toolkit.ns('status'),
       utils = toolkit.ns('utils'),
       radar = toolkit.ns('radar'),
@@ -36,7 +37,7 @@ Robot.prototype.onIdle = function(ev) {
       command.trace(robot, target);
     } else {
       robot.move(10, sts.direction);
-      robot.turn(1);
+      robot.turn(1 * (sts.idleCount % 50));
     }
   }
   log('Status=' + status.dump());

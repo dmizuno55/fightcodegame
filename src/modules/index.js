@@ -32,9 +32,22 @@ var toolkit = toolkit || {};
   })();
 
   /**
+   * clock
+   */
+  (function(clock) {
+    var time = 0;
+    clock.tick = function() {
+      time++;
+    };
+
+    clock.now = function() {
+      return time;
+    };
+  })(toolkit.ns('clock'));
+
+  /**
    * utils
    */
-  var utils = toolkit.ns('utils');
   (function(utils) {
     utils.isClone = function(robot) {
       return robot.parentId !== null;
@@ -50,16 +63,16 @@ var toolkit = toolkit || {};
 
     utils.logger = function(context, robot) {
       return function(message) {
+        //TODO multiple arguments string or object
         var msg = '[' + context + ']' + message;
         robot.log(msg);
       };
     };
-  })(utils);
+  })(toolkit.ns('utils'));
 
   /**
    * status
    */
-  var status = toolkit.ns('status');
   (function(status){
     var robots = {};
     status.get = function(id) {
@@ -82,17 +95,18 @@ var toolkit = toolkit || {};
     status.clear = function() {
       robots = {};
     };
-  })(status);
+  })(toolkit.ns('status'));
 
   /**
    * radar
    */
-  var radar = toolkit.ns('radar');
   (function(radar) {
+    var clock = toolkit.ns('clock');
+    var utils = toolkit.ns('utils');
     var robots = {};
 
     radar.mark = function(robot) {
-      robots[robot.id] = robot;
+      robots[robot.id] = {robot: robot, time: clock.now()};
     };
 
     radar.reset = function(robot) {
@@ -109,29 +123,33 @@ var toolkit = toolkit || {};
       for (e in robots) {
         log('dx=' + dx + ',dy=' + dy);
         target = robots[e];
-        ePos = target.position;
+        if (clock.now() - target.time > 500) {
+          continue;
+        }
+        ePos = target.robot.position;
         if (dx > Math.abs(mPos.x - ePos.x) || dy > Math.abs(mPos.y - ePos.y)) {
           dx = Math.abs(mPos.x - ePos.x);
           dy = Math.abs(mPos.y - ePos.y);
-          enemy = target;
+          enemy = target.robot;
         }
       }
+
       return enemy;
     };
-  })(radar);
+  })(toolkit.ns('radar'));
 
   /**
    * tracker
    */
-  var tracker = toolkit.ns('tracker');
   (function(tracker) {
+    var utils = toolkit.ns('utils');
     var robots = {};
 
     tracker.mark = function(robot) {
       robots[robot.id] = robot;
     };
 
-    tracker.reset = function(robot) {
+    tracker.unmark = function(robot) {
       delete robots[robot.id];
     };
 
@@ -142,7 +160,7 @@ var toolkit = toolkit || {};
       var dx = me.arenaWidth - me.position.x < me.arenaWidth / 2 ? 0 : me.arenaWidth; // farthest point
       var dy = me.arenaHeight - me.position.y < me.arenaHeight / 2 ? 0 : me.arenaHeight; // farthest point
       var target;
-      for (e in robots) {
+      for (e in Object.keys(robots)) {
         log('dx=' + dx + ',dy=' + dy);
         target = Radar.robots[e];
         ePos = target.position;
@@ -154,13 +172,13 @@ var toolkit = toolkit || {};
       }
       return enemy;
     };
-  })(tracker);
+  })(toolkit.ns('tracker'));
 
   /**
    * command
    */
-  var command = toolkit.ns('command');
   (function(command) {
+    var utils = toolkit.ns('utils');
     command.trace = function(me, target) {
       var log = utils.logger('command.trace', me);
       var mPos = me.position;
@@ -195,5 +213,5 @@ var toolkit = toolkit || {};
       }
       log('after angle=' + robot.angle);
     };
-  })(command);
+  })(toolkit.ns('command'));
 })();
