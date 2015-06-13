@@ -22,7 +22,6 @@ Robot.prototype.onIdle = function(ev) {
   }
 
   if (robot.cannonRelativeAngle !== 180) {
-    log('init');
     robot.rotateCannon(180 - robot.cannonRelativeAngle);
     if (utils.isClone(robot)) {
       sts.direction = -1;
@@ -40,11 +39,12 @@ Robot.prototype.onIdle = function(ev) {
       robot.turn(1 * (sts.idleCount % 50));
     }
   }
-  log('Status=' + status.dump());
+//  log('Status=' + status.dump());
 };
 
 Robot.prototype.onScannedRobot = function(ev) {
   var status = toolkit.ns('status'),
+      clock = toolkit.ns('clock'),
       utils = toolkit.ns('utils'),
       radar = toolkit.ns('radar');
 
@@ -60,9 +60,9 @@ Robot.prototype.onScannedRobot = function(ev) {
   sts.robotFound = true;
   sts.idleCount = 0;
 
+  log(target.id, clock.now());
   radar.mark(target);
 
-  log('id=' + robot.id);
   var i, dir, slide;
   for (i = 0; i < 5; i++) {
     if (i % 2 === 0) {

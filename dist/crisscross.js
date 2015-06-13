@@ -61,11 +61,40 @@ var toolkit = toolkit || {};
       }
     };
 
-    utils.logger = function(context, robot) {
+    utils.logger = function (context, robot) {
       return function(message) {
-        var msg = '[' + context + ']' + message;
-        robot.log(msg);
+        var i, msg = [];
+        for (i = 0; i < arguments.length; i++) {
+          if (typeof arguments[i] === 'object') {
+            msg.push(JSON.stringify(arguments[i]));
+          } else {
+            msg.push(arguments[i]);
+          }
+        }
+        robot.log('[' + context + '] ' + msg.join(' '));
       };
+    };
+
+    utils.calculateAngle = function(basePoint, targetPoint) {
+      var normalizedPoint = {
+        x: targetPoint.x - basePoint.x,
+        y: -(targetPoint.y - basePoint.y)
+      };
+      var degrees = 90 - Math.atan2(normalizedPoint.y, normalizedPoint.x) * 180 / Math.PI;
+      degrees = Math.round(degrees);
+      return degrees < 0 ? 360 + degrees : degrees;
+    };
+    
+    utils.deltaAngle = function(baseDegrees, targetDegrees) {
+      var deltaDegrees = targetDegrees - baseDegrees;
+      if (Math.abs(deltaDegrees) > 180) {
+        if (deltaDegrees > 0) {
+          deltaDegrees = deltaDegrees - 360;
+        } else {
+          deltaDegrees = deltaDegrees + 360;
+        }
+      }
+      return deltaDegrees;
     };
   })(toolkit.ns('utils'));
 
@@ -120,9 +149,8 @@ var toolkit = toolkit || {};
       var dy = me.arenaHeight; // farthest point
       var target;
       for (e in robots) {
-        log('dx=' + dx + ',dy=' + dy);
         target = robots[e];
-        if (clock.now() - target.time > 500) {
+        if (clock.now() - target.time > 50) {
           continue;
         }
         ePos = target.robot.position;
@@ -132,46 +160,11 @@ var toolkit = toolkit || {};
           enemy = target.robot;
         }
       }
+      log(enemy);
 
       return enemy;
     };
   })(toolkit.ns('radar'));
-
-  /**
-   * tracker
-   */
-  (function(tracker) {
-    var utils = toolkit.ns('utils');
-    var robots = {};
-
-    tracker.mark = function(robot) {
-      robots[robot.id] = robot;
-    };
-
-    tracker.unmark = function(robot) {
-      delete robots[robot.id];
-    };
-
-    tracker.search = function(me) {
-      var log = utils.logger('tracker.search', me);
-      var mPos = me.position;
-      var e, ePos, enemy;
-      var dx = me.arenaWidth - me.position.x < me.arenaWidth / 2 ? 0 : me.arenaWidth; // farthest point
-      var dy = me.arenaHeight - me.position.y < me.arenaHeight / 2 ? 0 : me.arenaHeight; // farthest point
-      var target;
-      for (e in Object.keys(robots)) {
-        log('dx=' + dx + ',dy=' + dy);
-        target = Radar.robots[e];
-        ePos = target.position;
-        if (dx > Math.abs(mPos.x - ePos.x) || dy > Math.abs(mPos.y - ePos.y)) {
-          dx = Math.abs(mPos.x - ePos.x);
-          dy = Math.abs(mPos.y - ePos.y);
-          enemy = target;
-        }
-      }
-      return enemy;
-    };
-  })(toolkit.ns('tracker'));
 
   /**
    * command
@@ -182,34 +175,27 @@ var toolkit = toolkit || {};
       var log = utils.logger('command.trace', me);
       var mPos = me.position;
       var tPos = target.position;
-      var dir = Math.atan2(Math.abs(tPos.y - mPos.y), Math.abs(tPos.x - mPos.x)) * 180 / Math.PI;
-      var absoluteDir = dir > 0 ? 360 - dir : 360 + dir;
-      Command.turnTo(me, absoluteDir);
+      var degrees = utils.caluclateAngle(mPos, tPos);
+      command.turnTo(me, degrees);
       log('angle=' + me.angle);
     };
 
     command.go = function(robot, distance) {
       var log = utils.logger('command.go', robot);
-      var curPos = robot.position;
-      var dir = Math.atan2(Math.abs(distance.y - curPos.y), Math.abs(distance.x - curPos.x)) * 180 / Math.PI;
-      log('c.x=' + curPos.x + ',c.y=' + curPos.y + ',angle=' + robot.angle);
+      var basePosition = robot.position;
+      var degrees = utils.caluclateAngle(basePosition, distance);
+      log('c.x=' + basePosition.x + ',c.y=' + basePosition.y + ',angle=' + robot.angle);
       log('d.x=' + distance.x + ',d.y=' + distance.y);
-      log('dir=' + dir);
-      var length = Math.sqrt(Math.pow(curPos.y - distance.y, 2) + Math.pow(curPos.x - distance.x, 2));
-      var absoluteDir = dir > 0 ? 360 - dir : 360 + dir;
-      log('absoluteDir=' + absoluteDir);
-      Command.turnTo(robot.turn(absoluteDir));
+      log('degrees=' + degrees);
+      var length = Math.sqrt(Math.pow(basePosition.y - distance.y, 2) + Math.pow(basePosition.x - distance.x, 2));
+      command.turnTo(robot, degrees);
       robot.ahead(length);
     };
 
     command.turnTo = function(robot, degrees) {
       var log = utils.logger('command.turnTo', robot);
       log('before angle=' + robot.angle);
-      if (robot.angle > degrees) {
-        robot.turn(robot.angle - degrees);
-      } else {
-        robot.turn(degrees - robot.angle);
-      }
+      robot.turn(utils.deltaAngle(degrees));
       log('after angle=' + robot.angle);
     };
   })(toolkit.ns('command'));
