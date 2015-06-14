@@ -4,7 +4,6 @@ var toolkit = toolkit || {};
    * namespace
    */
   toolkit.ns = (function() {
-    var LIB_NAME = 'toolkit';
     var namespace = {};
 
     return function(name) {
@@ -14,10 +13,6 @@ var toolkit = toolkit || {};
           i;
 
       dirs = name.split('.');
-      if (dirs[0] === LIB_NAME) {
-        dirs.shift();
-      }
-
       currDir = namespace;
       for (i = 0; i < dirs.length; i++) {
         node = dirs[i];
@@ -75,16 +70,26 @@ var toolkit = toolkit || {};
       };
     };
 
-    utils.calculateAngle = function(basePoint, targetPoint) {
+    utils.calculateAngle = function(basePos, targetPos) {
       var normalizedPoint = {
-        x: targetPoint.x - basePoint.x,
-        y: -(targetPoint.y - basePoint.y)
+        x: targetPos.x - basePos.x,
+        y: -(targetPos.y - basePos.y)
       };
       var degrees = 90 - Math.atan2(normalizedPoint.y, normalizedPoint.x) * 180 / Math.PI;
       degrees = Math.round(degrees);
       return degrees < 0 ? 360 + degrees : degrees;
     };
     
+    utils.calculateCannonAngle = function(basePos, targetPos) {
+      var normalizedPoint = {
+        x: targetPos.x - basePos.x,
+        y: -(targetPos.y - basePos.y)
+      };
+      var degrees = 180 - Math.atan2(normalizedPoint.y, normalizedPoint.x) * 180 / Math.PI;
+      degrees = Math.round(degrees);
+      return degrees === 360 ? 0 : degrees;
+    };
+
     utils.deltaAngle = function(baseDegrees, targetDegrees) {
       var deltaDegrees = targetDegrees - baseDegrees;
       if (Math.abs(deltaDegrees) > 180) {
@@ -96,27 +101,44 @@ var toolkit = toolkit || {};
       }
       return deltaDegrees;
     };
+
   })(toolkit.ns('utils'));
 
   /**
    * status
    */
   (function(status){
+    function Status() {
+      this.robotFound = false;
+      this.idleCount = 0;
+      this.direction = 1;
+      this.turnDirection = 1;
+      this.initialize = false;
+    }
+    Status.prototype.init = function(direction) {
+      this.direction = direction;
+      this.initialize = true;
+    };
+    Status.prototype.idle = function() {
+      this.idleCount++;
+      if (this.idleCount > 50) {
+        this.robotFound = false;
+      }
+    };
+    Status.prototype.encount = function() {
+      this.idleCount = 0;
+      this.robotFound = true;
+    };
+
     var robots = {};
     status.get = function(id) {
       if (!robots[id]) {
-        robots[id] = {
-          robotFound: false,
-          idleCount: 0,
-          direction: 1,
-          turnDirection: 1,
-          initialize: false
-        };
+        robots[id] = new Status();
       }
       return robots[id];
     };
 
-    status.dump = function() {
+    status.toString = function() {
       return JSON.stringify(robots);
     };
 
@@ -134,7 +156,17 @@ var toolkit = toolkit || {};
     var robots = {};
 
     radar.mark = function(robot) {
-      robots[robot.id] = {robot: robot, time: clock.now()};
+      var prev = robots[robot.id];
+      robots[robot.id] = {
+        robot: robot,
+        updatedTime: clock.now()
+      };
+      if (prev && prev.updatedTime - clock.now() < 30) {
+        robots[robot.id].prev = {
+          robot: prev.robot,
+          updatedTime: prev.updatedTime
+        };
+      }
     };
 
     radar.reset = function(robot) {
@@ -143,26 +175,43 @@ var toolkit = toolkit || {};
 
     radar.search = function(me) {
       var log = utils.logger('radar.search', me);
-      var mPos = me.position;
-      var e, ePos, enemy;
       var dx = me.arenaWidth; // farthest point
       var dy = me.arenaHeight; // farthest point
-      var target;
-      for (e in robots) {
-        target = robots[e];
-        if (clock.now() - target.time > 50) {
-          continue;
+      var mPos = me.position;
+      var searchedMarker = null;
+      Object.keys(robots).forEach(function(id) {
+        var target = robots[id];
+        var tPos = target.robot.position;
+        if (clock.now() - target.updatedTime > 100) {
+          return;
         }
-        ePos = target.robot.position;
-        if (dx > Math.abs(mPos.x - ePos.x) || dy > Math.abs(mPos.y - ePos.y)) {
-          dx = Math.abs(mPos.x - ePos.x);
-          dy = Math.abs(mPos.y - ePos.y);
-          enemy = target.robot;
+        if (dx > Math.abs(mPos.x - tPos.x) || dy > Math.abs(mPos.y - tPos.y)) {
+          dx = Math.abs(mPos.x - tPos.x);
+          dy = Math.abs(mPos.y - tPos.y);
+          searchedMarker = target;
         }
-      }
-      log(enemy);
+      });
+      log(searchedMarker, clock.now());
 
-      return enemy;
+      return searchedMarker;
+    };
+
+    radar.forecastPosition = function(marker) {
+      if (!marker.prev) {
+        return marker.robot.position;
+      }
+      var prev = marker.prev;
+      var robot = marker.robot;
+      var prevRobot = prev.robot;
+      var deltaTime = marker.updatedTime - prev.updatedTime;
+      var velocity = {
+        x: (robot.position.x - prevRobot.position.x) / deltaTime,
+        y: (robot.position.y - prevRobot.position.y) / deltaTime
+      };
+      return {
+        x: robot.position.x + velocity.x,
+        y: robot.position.y + velocity.y
+      };
     };
   })(toolkit.ns('radar'));
 
@@ -171,32 +220,48 @@ var toolkit = toolkit || {};
    */
   (function(command) {
     var utils = toolkit.ns('utils');
-    command.trace = function(me, target) {
-      var log = utils.logger('command.trace', me);
-      var mPos = me.position;
-      var tPos = target.position;
-      var degrees = utils.caluclateAngle(mPos, tPos);
-      command.turnTo(me, degrees);
-      log('angle=' + me.angle);
-    };
-
-    command.go = function(robot, distance) {
-      var log = utils.logger('command.go', robot);
+    command.trace = function(robot, dest) {
+      var log = utils.logger('command.trace', robot);
       var basePosition = robot.position;
-      var degrees = utils.caluclateAngle(basePosition, distance);
+      var degrees = utils.caluclateAngle(basePosition, dest);
       log('c.x=' + basePosition.x + ',c.y=' + basePosition.y + ',angle=' + robot.angle);
-      log('d.x=' + distance.x + ',d.y=' + distance.y);
+      log('d.x=' + dest.x + ',d.y=' + dest.y);
       log('degrees=' + degrees);
-      var length = Math.sqrt(Math.pow(basePosition.y - distance.y, 2) + Math.pow(basePosition.x - distance.x, 2));
+      var length = Math.sqrt(Math.pow(basePosition.y - dest.y, 2) + Math.pow(basePosition.x - dest.x, 2));
       command.turnTo(robot, degrees);
       robot.ahead(length);
     };
 
+    command.turnToDest = function(robot, dest) {
+      var log = utils.logger('command.turnToDest', robot);
+      var mPos = robot.position;
+      log('dest', dest);
+      var degrees = utils.calculateAngle(mPos, dest);
+      command.turnTo(robot, degrees);
+    };
+
     command.turnTo = function(robot, degrees) {
       var log = utils.logger('command.turnTo', robot);
-      log('before angle=' + robot.angle);
+      degrees = utils.deltaAngle(robot.angle, degrees);
+      log('before', 'angle=' + robot.angle, 'delta=' + degrees);
       robot.turn(utils.deltaAngle(degrees));
-      log('after angle=' + robot.angle);
+      log('after', 'angle=' + robot.angle);
+    };
+
+    command.turnCannonToDest = function(robot, dest) {
+      var log = utils.logger('command.turnCannonToDest', robot);
+      var mPos = robot.position;
+      log('dest', dest);
+      var degrees = utils.calculateAngle(mPos, dest);
+      command.turnCannonTo(robot, degrees);
+    };
+
+    command.turnCannonTo = function(robot, degrees) {
+      var log = utils.logger('command.turnCannonTo', robot);
+      degrees = utils.deltaAngle(robot.cannonAbsoluteAngle, degrees);
+      log('before', 'angle=' + robot.cannonAbsoluteAngle, 'delta=' + degrees);
+      robot.rotateCannon(utils.deltaAngle(degrees));
+      log('after', 'angle=' + robot.cannonAbsoluteAngle);
     };
   })(toolkit.ns('command'));
 })();
@@ -208,41 +273,40 @@ var Robot = function(robot) {
 };
 
 Robot.prototype.onIdle = function(ev) {
-  // load toolkitk
-  toolkit.ns('clock').tick();
+  // load toolkit
   var status = toolkit.ns('status'),
+      clock = toolkit.ns('clock'),
       utils = toolkit.ns('utils'),
       radar = toolkit.ns('radar'),
       command = toolkit.ns('command');
 
+  clock.tick();
+
+  var log = utils.logger('Robot.onIdle', robot);
   var robot = ev.robot;
   var sts = status.get(robot.id);
-  var log = utils.logger('Robot.onIdle', robot);
 
-  sts.idleCount++;
-  if (sts.idleCount > 50) {
-    sts.robotFound = false;
+  sts.idle();
+  if (sts.robotFound) {
+    return;
   }
 
   if (robot.cannonRelativeAngle !== 180) {
     robot.rotateCannon(180 - robot.cannonRelativeAngle);
-    if (utils.isClone(robot)) {
-      sts.direction = -1;
-    } else {
-      sts.direction = 1;
+    if (!sts.initialize) {
+      utils.isClone(robot) ? sts.init(-1) : sts.init(1);
     }
   }
 
-  if (!sts.robotFound) {
-    var target = radar.search(robot);
-    if (target) {
-      command.trace(robot, target);
-    } else {
-      robot.move(10, sts.direction);
-      robot.turn(1 * (sts.idleCount % 50));
-    }
+  var target = radar.search(robot);
+  if (target) {
+    robot.stop();
+    var targetPos = radar.forecastPosition(target);
+    command.turnToDest(robot, targetPos);
+    command.turnCannonToDest(robot, targetPos);
+  } else {
+    robot.move(50 * sts.direction);
   }
-//  log('Status=' + status.dump());
 };
 
 Robot.prototype.onScannedRobot = function(ev) {
@@ -260,14 +324,13 @@ Robot.prototype.onScannedRobot = function(ev) {
     return;
   }
 
-  sts.robotFound = true;
-  sts.idleCount = 0;
+  sts.encount();
 
   log(target.id, clock.now());
   radar.mark(target);
 
   var i, dir, slide;
-  for (i = 0; i < 5; i++) {
+  for (i = 0; i < 10; i++) {
     if (i % 2 === 0) {
       dir = 1;
       slide = 1

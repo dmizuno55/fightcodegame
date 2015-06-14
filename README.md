@@ -15,3 +15,10 @@ _origin is top,left._
 ↓: 180
 ←: 270
 
+### Robot Cannon Angle
+↑: 90
+→: 180
+↓: 270
+←: 0
+
+_Relative angle is a relative value that the front of the robot is set to 0 degrees ._

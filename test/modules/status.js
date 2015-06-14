@@ -4,7 +4,7 @@ describe('status', function() {
   var status = toolkit.ns('status');
   beforeEach(function() {
     var sts = status.get('hoge');
-    sts.robotFound = true;
+    sts.encount();
   });
   afterEach(function() {
     status.clear();
@@ -21,7 +21,7 @@ describe('status', function() {
   });
 
   it('dump status', function() {
-    var dump = status.dump();
+    var dump = status.toString();
     assert.deepEqual(dump, '{"hoge":{"robotFound":true,"idleCount":0,"direction":1,"turnDirection":1,"initialize":false}}');
   });
 });
