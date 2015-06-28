@@ -306,7 +306,7 @@ var toolkit = toolkit || {};
       var utils = toolkit.ns('utils');
       var log = toolkit.getLogger('command.turnTo', robot);
       degrees = utils.deltaAngle(robot.angle, degrees);
-      if (degress !== 0) {
+      if (degrees !== 0) {
         log('before', robot.angle, 'delta', degrees);
         robot.turn(degrees);
         log('after', robot.angle);

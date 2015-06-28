@@ -135,10 +135,11 @@ Robot.prototype.onHitByBullet = function(ev) {
 };
 
 Robot.prototype.onWallCollision = function(ev) {
-  toolkit.ns('clock').tick();
-  var log = toolkit.getLogger('Robot.onWallCollision', robot);
-
   var robot = ev.robot;
+
+  toolkit.ns('clock').tick();
+
+  var log = toolkit.getLogger('Robot.onWallCollision', robot);
 
   log(robot.angle, ev.bearing);
   robot.turn(90 + ev.bearing);

@@ -96,14 +96,14 @@ var toolkit = toolkit || {};
 
   (function(logger) {
     var pattern = null;
-    function isLogged(message) {
+    function isLogged_(message) {
       if (pattern && !pattern.test(message)) {
         return false;
       }
       return true;
     }
 
-    function buildMessage(messages) {
+    function buildMessage_(messages) {
         var i, msg = [];
         for (i = 0; i < messages.length; i++) {
           if (typeof messages[i] === 'object') {
@@ -118,8 +118,8 @@ var toolkit = toolkit || {};
     logger.get = function (context, robot) {
       var clock = toolkit.ns('clock');
       return function(_opts) {
-        var message = clock.now() + ' ' + robot.id + ' [' + context + '] ' + buildMessage(arguments);
-        if (!isLogged(message)) {
+        var message = clock.now() + ' ' + robot.id + ' [' + context + '] ' + buildMessage_(arguments);
+        if (!isLogged_(message)) {
           return;
         }
         if (robot.log) {
@@ -306,7 +306,7 @@ var toolkit = toolkit || {};
       var utils = toolkit.ns('utils');
       var log = toolkit.getLogger('command.turnTo', robot);
       degrees = utils.deltaAngle(robot.angle, degrees);
-      if (degress !== 0) {
+      if (degrees !== 0) {
         log('before', robot.angle, 'delta', degrees);
         robot.turn(degrees);
         log('after', robot.angle);
