@@ -38,6 +38,10 @@ var toolkit = toolkit || {};
     clock.now = function() {
       return time;
     };
+
+    clock.reset = function() {
+      time = 0;
+    };
   })(toolkit.ns('clock'));
 
   /**
@@ -56,20 +60,6 @@ var toolkit = toolkit || {};
       }
     };
 
-    utils.logger = function (context, robot) {
-      return function(message) {
-        var i, msg = [];
-        for (i = 0; i < arguments.length; i++) {
-          if (typeof arguments[i] === 'object') {
-            msg.push(JSON.stringify(arguments[i]));
-          } else {
-            msg.push(arguments[i]);
-          }
-        }
-        robot.log('[' + context + '] ' + msg.join(' '));
-      };
-    };
-
     utils.calculateAngle = function(basePos, targetPos) {
       var normalizedPoint = {
         x: targetPos.x - basePos.x,
@@ -79,7 +69,7 @@ var toolkit = toolkit || {};
       degrees = Math.round(degrees);
       return degrees < 0 ? 360 + degrees : degrees;
     };
-    
+
     utils.calculateCannonAngle = function(basePos, targetPos) {
       var normalizedPoint = {
         x: targetPos.x - basePos.x,
@@ -104,6 +94,47 @@ var toolkit = toolkit || {};
 
   })(toolkit.ns('utils'));
 
+  (function(logger) {
+    var pattern = null;
+    function isLogged(message) {
+      if (pattern && !pattern.test(message)) {
+        return false;
+      }
+      return true;
+    }
+
+    function buildMessage(messages) {
+        var i, msg = [];
+        for (i = 0; i < messages.length; i++) {
+          if (typeof messages[i] === 'object') {
+            msg.push(JSON.stringify(messages[i]));
+          } else {
+            msg.push(messages[i]);
+          }
+        }
+        return msg.join(' ');
+    }
+
+    logger.get = function (context, robot) {
+      var clock = toolkit.ns('clock');
+      return function(_opts) {
+        var message = clock.now() + ' ' + robot.id + ' [' + context + '] ' + buildMessage(arguments);
+        if (!isLogged(message)) {
+          return;
+        }
+        if (robot.log) {
+          robot.log(message);
+        } else {
+          console.log(message);
+        }
+      };
+    };
+
+    logger.filter = function(ptn) {
+      pattern = ptn;
+    }
+  })(toolkit.ns('logger'));
+
   /**
    * status
    */
@@ -113,11 +144,11 @@ var toolkit = toolkit || {};
       this.idleCount = 0;
       this.direction = 1;
       this.turnDirection = 1;
-      this.initialize = false;
+      this.initialized = false;
     }
     Status.prototype.init = function(direction) {
       this.direction = direction;
-      this.initialize = true;
+      this.initialized = true;
     };
     Status.prototype.idle = function() {
       this.idleCount++;
@@ -151,11 +182,10 @@ var toolkit = toolkit || {};
    * radar
    */
   (function(radar) {
-    var clock = toolkit.ns('clock');
-    var utils = toolkit.ns('utils');
     var robots = {};
 
     radar.mark = function(robot) {
+      var clock = toolkit.ns('clock');
       var prev = robots[robot.id];
       robots[robot.id] = {
         robot: robot,
@@ -167,36 +197,65 @@ var toolkit = toolkit || {};
           updatedTime: prev.updatedTime
         };
       }
+      return robots[robot.id];
     };
 
-    radar.reset = function(robot) {
+    radar.getMarker = function(robot) {
+      return robots[robot.id];
+    };
+
+    radar.unmark = function(robot) {
       delete robots[robot.id];
     };
 
-    radar.search = function(me) {
-      var log = utils.logger('radar.search', me);
-      var dx = me.arenaWidth; // farthest point
-      var dy = me.arenaHeight; // farthest point
-      var mPos = me.position;
-      var searchedMarker = null;
-      Object.keys(robots).forEach(function(id) {
-        var target = robots[id];
-        var tPos = target.robot.position;
-        if (clock.now() - target.updatedTime > 100) {
-          return;
-        }
-        if (dx > Math.abs(mPos.x - tPos.x) || dy > Math.abs(mPos.y - tPos.y)) {
-          dx = Math.abs(mPos.x - tPos.x);
-          dy = Math.abs(mPos.y - tPos.y);
-          searchedMarker = target;
-        }
-      });
-      log(searchedMarker, clock.now());
-
-      return searchedMarker;
+    radar.reset = function() {
+      robots = [];
     };
 
-    radar.forecastPosition = function(marker) {
+    radar.searchClosest = function(me) {
+      var clock = toolkit.ns('clock');
+      var utils = toolkit.ns('utils');
+      var log = toolkit.getLogger('radar.searchClosest', me);
+      var list = Object.keys(robots).filter(function(id) {
+        var target = robots[id];
+        return (clock.now() - target.updatedTime) <= 100;
+      }).sort(function(t1, t2) {
+        var mPos = me.position;
+        var tPos1 = robots[t1].robot.position;
+        var tPos2 = robots[t2].robot.position;
+        var dx1 = Math.abs(mPos.x - tPos1.x);
+        var dy1 = Math.abs(mPos.y - tPos1.y);
+        var dx2 = Math.abs(mPos.x - tPos2.x);
+        var dy2 = Math.abs(mPos.y - tPos2.y);
+        if (dx1 < dx2 || dy1 < dy2) {
+          return -1;
+        } else {
+          return 1;
+        }
+      });
+      log(list);
+      return list.length === 0 ? null : robots[list[0]];
+    }
+
+    radar.searchLeader = function(me) {
+      var clock = toolkit.ns('clock');
+      var utils = toolkit.ns('utils');
+      var logger = toolkit.ns('logger');
+      var log = toolkit.getLogger('radar.searchLeader', me);
+      var list = Object.keys(robots).filter(function(id) {
+        var target = robots[id];
+        if (clock.now() - target.updatedTime <= 100) {
+          if (target.robot.parentId === null) {
+            return true;
+          }
+        }
+        return false;
+      });
+      log(list);
+      return list.lenght === 0 ? null : robots[list[0]];
+    }
+
+    radar.forecast = function(marker) {
       if (!marker.prev) {
         return marker.robot.position;
       }
@@ -204,6 +263,7 @@ var toolkit = toolkit || {};
       var robot = marker.robot;
       var prevRobot = prev.robot;
       var deltaTime = marker.updatedTime - prev.updatedTime;
+      deltaTime = deltaTime === 0 ? 1 : deltaTime;
       var velocity = {
         x: (robot.position.x - prevRobot.position.x) / deltaTime,
         y: (robot.position.y - prevRobot.position.y) / deltaTime
@@ -219,11 +279,11 @@ var toolkit = toolkit || {};
    * command
    */
   (function(command) {
-    var utils = toolkit.ns('utils');
     command.trace = function(robot, dest) {
-      var log = utils.logger('command.trace', robot);
+      var utils = toolkit.ns('utils');
+      var log = toolkit.getLogger('command.trace', robot);
       var basePosition = robot.position;
-      var degrees = utils.caluclateAngle(basePosition, dest);
+      var degrees = utils.calclateAngle(basePosition, dest);
       log('c.x=' + basePosition.x + ',c.y=' + basePosition.y + ',angle=' + robot.angle);
       log('d.x=' + dest.x + ',d.y=' + dest.y);
       log('degrees=' + degrees);
@@ -232,38 +292,52 @@ var toolkit = toolkit || {};
       robot.ahead(length);
     };
 
-    command.turnToDest = function(robot, dest) {
-      var log = utils.logger('command.turnToDest', robot);
+    command.turnToDest = function(robot, dest, offset) {
+      var utils = toolkit.ns('utils');
+      var log = toolkit.getLogger('command.turnToDest', robot);
+      offset = offset || 0;
       var mPos = robot.position;
-      log('dest', dest);
       var degrees = utils.calculateAngle(mPos, dest);
-      command.turnTo(robot, degrees);
+      log('curr', mPos, 'dest', dest, 'degrees', degrees);
+      command.turnTo(robot, degrees + offset);
     };
 
     command.turnTo = function(robot, degrees) {
-      var log = utils.logger('command.turnTo', robot);
+      var utils = toolkit.ns('utils');
+      var log = toolkit.getLogger('command.turnTo', robot);
       degrees = utils.deltaAngle(robot.angle, degrees);
-      log('before', 'angle=' + robot.angle, 'delta=' + degrees);
-      robot.turn(utils.deltaAngle(degrees));
-      log('after', 'angle=' + robot.angle);
+      if (degress !== 0) {
+        log('before', robot.angle, 'delta', degrees);
+        robot.turn(degrees);
+        log('after', robot.angle);
+      }
     };
 
-    command.turnCannonToDest = function(robot, dest) {
-      var log = utils.logger('command.turnCannonToDest', robot);
+    command.turnCannonToDest = function(robot, dest, offset) {
+      var utils = toolkit.ns('utils');
+      offset = offset || 0;
+      var log = toolkit.getLogger('command.turnCannonToDest', robot);
       var mPos = robot.position;
-      log('dest', dest);
       var degrees = utils.calculateAngle(mPos, dest);
-      command.turnCannonTo(robot, degrees);
+      log('curr', mPos, 'dest', dest, 'degrees', degrees);
+      command.turnTo(robot, degrees + offset);
+      command.turnCannonTo(robot, degrees + offset);
     };
 
     command.turnCannonTo = function(robot, degrees) {
-      var log = utils.logger('command.turnCannonTo', robot);
+      var utils = toolkit.ns('utils');
+      var log = toolkit.getLogger('command.turnCannonTo', robot);
       degrees = utils.deltaAngle(robot.cannonAbsoluteAngle, degrees);
-      log('before', 'angle=' + robot.cannonAbsoluteAngle, 'delta=' + degrees);
-      robot.rotateCannon(utils.deltaAngle(degrees));
-      log('after', 'angle=' + robot.cannonAbsoluteAngle);
+      if (degrees !== 0) {
+        log('before', robot.cannonAbsoluteAngle, 'delta', degrees);
+        robot.rotateCannon(degrees);
+        log('after', robot.cannonAbsoluteAngle);
+      }
     };
   })(toolkit.ns('command'));
+
+  // alias
+  toolkit.getLogger = toolkit.ns('logger').get;
 })();
 
 var Robot = function(robot) {

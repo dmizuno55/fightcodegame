@@ -22,6 +22,6 @@ describe('status', function() {
 
   it('dump status', function() {
     var dump = status.toString();
-    assert.deepEqual(dump, '{"hoge":{"robotFound":true,"idleCount":0,"direction":1,"turnDirection":1,"initialize":false}}');
+    assert.deepEqual(dump, '{"hoge":{"robotFound":true,"idleCount":0,"direction":1,"turnDirection":1,"initialized":false}}');
   });
 });

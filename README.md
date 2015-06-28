@@ -4,6 +4,7 @@ This is my robot's code backup for [fightcodegame](http://fightcodegame.com/)
 ## Game Specifications
 
 ### Area Size
+#### Training Field
 width: 395
 height: 480
 
