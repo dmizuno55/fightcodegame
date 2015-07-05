@@ -9,6 +9,10 @@ module.exports = function(grunt) {
       crisscross: {
         src: ['src/modules/index.js', 'src/robot/crisscross.js'],
         dest: 'dist/crisscross.js'
+      },
+      test: {
+        src: ['src/modules/index.js', 'src/robot/test.js'],
+        dest: 'dist/test.js'
       }
     },
   });

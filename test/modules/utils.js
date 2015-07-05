@@ -186,4 +186,71 @@ describe('utils', function() {
       assert(utils.deltaAngle(210, 10) === 160);
     });
   });
+
+  describe('splitDegrees', function() {
+    it('exists surplus', function() {
+      assert.deepEqual(utils.splitDegrees(100, 40), [40, 40, 20]);
+    });
+    it('not exists surplus', function() {
+      assert.deepEqual(utils.splitDegrees(90, 30), [30, 30, 30, 0]);
+    });
+    it('only surplus', function() {
+      assert.deepEqual(utils.splitDegrees(10, 30), [10]);
+    });
+  });
+
+  describe('calclatePosition', function() {
+    it('degress 30', function() {
+      var base = {x: 0, y: 0};
+      assert.deepEqual(utils.calclatePosition(base, 30, 2), {x: 2, y: 1});
+    });
+    it('degress 60', function() {
+      var base = {x: 0, y: 0};
+      assert.deepEqual(utils.calclatePosition(base, 60, 2), {x: 1, y: 2});
+    });
+    it('degress 90', function() {
+      var base = {x: 0, y: 0};
+      assert.deepEqual(utils.calclatePosition(base, 90, 2), {x: 0, y: 2});
+    });
+    it('degress 120', function() {
+      var base = {x: 0, y: 0};
+      assert.deepEqual(utils.calclatePosition(base, 120, 2), {x: -1, y: 2});
+    });
+    it('degress 150', function() {
+      var base = {x: 0, y: 0};
+      assert.deepEqual(utils.calclatePosition(base, 150, 2), {x: -2, y: 1});
+    });
+    it('degress 180', function() {
+      var base = {x: 0, y: 0};
+      assert.deepEqual(utils.calclatePosition(base, 180, 2), {x: -2, y: 0});
+    });
+    it('degress 210', function() {
+      var base = {x: 0, y: 0};
+      assert.deepEqual(utils.calclatePosition(base, 210, 2), {x: -2, y: -1});
+    });
+    it('degress 240', function() {
+      var base = {x: 0, y: 0};
+      assert.deepEqual(utils.calclatePosition(base, 240, 2), {x: -1, y: -2});
+    });
+    it('degress 270', function() {
+      var base = {x: 0, y: 0};
+      assert.deepEqual(utils.calclatePosition(base, 270, 2), {x: 0, y: -2});
+    });
+    it('degress 300', function() {
+      var base = {x: 0, y: 0};
+      assert.deepEqual(utils.calclatePosition(base, 300, 2), {x: 1, y: -2});
+    });
+    it('degress 330', function() {
+      var base = {x: 0, y: 0};
+      assert.deepEqual(utils.calclatePosition(base, 330, 2), {x: 2, y: -1});
+    });
+    it('degress 360', function() {
+      var base = {x: 0, y: 0};
+      assert.deepEqual(utils.calclatePosition(base, 360, 2), {x: 2, y: 0});
+    });
+    it('degress 0', function() {
+      var base = {x: 0, y: 0};
+      assert.deepEqual(utils.calclatePosition(base, 0, 2), {x: 2, y: 0});
+    });
+  });
 });

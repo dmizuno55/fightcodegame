@@ -80,6 +80,11 @@ var toolkit = toolkit || {};
       return degrees === 360 ? 0 : degrees;
     };
 
+    /**
+     * return angle which is direction which move less distance
+     * @param baseDegrees
+     * @param targetDegrees move degrees
+     */
     utils.deltaAngle = function(baseDegrees, targetDegrees) {
       var deltaDegrees = targetDegrees - baseDegrees;
       if (Math.abs(deltaDegrees) > 180) {
@@ -92,6 +97,36 @@ var toolkit = toolkit || {};
       return deltaDegrees;
     };
 
+    utils.splitDegrees = function(degrees, unit) {
+      var result = [];
+      for (var i = 0, count = Math.floor(degrees / unit); i < count; i++) {
+        result.push(unit);
+      }
+      result.push(degrees % unit);
+      return result;
+    };
+
+    /**
+     * @param base base position
+     * @param degrees move direction based on base
+     * @param distance move distance based on base
+     */
+    utils.calclatePosition = function(base, degrees, distance) {
+      //TODO degrees is convert fightcodenize
+      var rad = utils.toRudian(degrees);
+      return {
+        x: Math.round(base.x + Math.cos(rad) * distance),
+        y: Math.round(base.y + Math.sin(rad) * distance)
+      };
+    };
+
+    /**
+     * convert angle into rudian
+     * @param degrees angle degrees
+     */
+    utils.toRudian = function(degrees) {
+      return Math.PI / 180 * degrees;
+    };
   })(toolkit.ns('utils'));
 
   (function(logger) {

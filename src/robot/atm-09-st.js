@@ -1,6 +1,7 @@
 //FightCode can only understand your robot
 //if its class is called Robot
 var Robot = function(robot) {
+  toolkit.ns('logger').filter(/\[Robot/);
   robot.clone();
 };
 
@@ -23,13 +24,8 @@ Robot.prototype.onIdle = function(ev) {
     return;
   }
 
-  if (robot.cannonRelativeAngle !== 180) {
-    if (sts.idleCount < 100) {
-      robot.rotateCannon(180 - robot.cannonRelativeAngle);
-    }
-    if (!sts.initialized) {
-      utils.isClone(robot) ? sts.init(-1) : sts.init(1);
-    }
+  if (!sts.initialized) {
+    utils.isClone(robot) ? sts.init(-1) : sts.init(1);
   }
 
   var target = radar.searchLeader(robot) || radar.searchClosest(robot);
@@ -38,12 +34,8 @@ Robot.prototype.onIdle = function(ev) {
     var targetPos = target.robot.position;
     command.turnToDest(robot, targetPos, -robot.cannonRelativeAngle + 90);
   } else {
-    robot.move(10 * sts.direction);
-    var center = {
-      x: robot.arenaWidth / 2,
-      y: robot.arenaHeight / 2
-    };
-    command.turnToDest(robot, center, -robot.cannonRelativeAngle + 90);
+    robot.move(5 * sts.direction);
+    robot.rotateCannon(30 * sts.direction);
   }
 };
 
@@ -62,7 +54,7 @@ Robot.prototype.onScannedRobot = function(ev) {
   var sts = status.get(robot.id);
 
   if (utils.isBuddy(robot, target)) {
-    robot.move(30 * sts.direction);
+    robot.back(10);
     return;
   }
 
@@ -70,22 +62,29 @@ Robot.prototype.onScannedRobot = function(ev) {
   radar.mark(target);
   robot.stop();
 
-  var i, dir, slide;
-  for (i = 0; i < 10; i++) {
-    if (i % 2 === 0) {
-      dir = 1;
-      slide = 1;
-    } else {
-      dir = -1;
-      slide = 0;
-    }
-    if (slide > 0) {
-      robot.rotateCannon(slide * sts.direction);
-      robot.turn(slide * sts.direction * -1);
-    }
+  for (var i = 0; i < 5; i++) {
     robot.fire();
-    robot.move(5 + slide, dir);
+    robot.ahead(3);
+    var dest = utils.calclatePosition(robot.position, robot.angle, 3);
+    var angle = utils.calclateAngle(dest, target.position);
+    command.turnCannonTo(robot, angle);
   }
+  // var relativeAngle = utils.deltaAngle(robot.angle, robot.cannonAbsoluteAngle);
+  // robot.turn(relativeAngle);
+  // robot.rotateCannon(-relativeAngle);
+  // var degrees = utils.splitDegrees(frontAngle, 10)[0];
+  // robot.turn(degrees);
+  // robot.rotateCannon(-degrees);
+  // for (var i = 0; i < 10; i++) {
+  //   robot.fire();
+  //   //robot.move(5, (i % 2 === 0 ? 1 : -1));
+  // }
+  // utils.splitDegrees(relativeAngle, 10).forEach(function(degrees) {
+  //   robot.fire();
+  //   robot.turn(degrees);
+  //   robot.rotateCannon(-degrees);
+  // });
+  // log('angle', robot.angle, 'cannonRelativeAngle', robot.cannonRelativeAngle, 'relativeAngle', relativeAngle);
 };
 
 Robot.prototype.onRobotCollision = function(ev) {
@@ -108,7 +107,8 @@ Robot.prototype.onRobotCollision = function(ev) {
     radar.mark(collidedRobot);
   }
 
-  log(robot.angle, ev.bearing);
+  // TODO if colliedRobot is buddy, get out. if not, turn to it.
+  log('angle', robot.angle, 'bearing', ev.bearing);
   if ((ev.bearing <= 30 && ev.bearing >= 0) || (ev.bearing >= -30 && ev.bearing <= 0)) {
     robot.back(100);
   } else if ((ev.bearing >= 150 && ev.bearing <= 180) || (ev.bearing <= -150 && ev.bearing >= -180)) {
@@ -130,7 +130,8 @@ Robot.prototype.onHitByBullet = function(ev) {
     robot.disappear();
   }
 
-  log(robot.angle, ev.bearing);
+  // TODO cannon turn to it.
+  log('angle', robot.angle, 'bearing', ev.bearing);
   command.turnTo(robot, robot.angle + ev.bearing -robot.cannonRelativeAngle + 90);
 };
 
@@ -141,6 +142,7 @@ Robot.prototype.onWallCollision = function(ev) {
 
   var log = toolkit.getLogger('Robot.onWallCollision', robot);
 
-  log(robot.angle, ev.bearing);
+  log('angle', robot.angle, 'bearing', ev.bearing);
   robot.turn(90 + ev.bearing);
+  robot.ahead(10);
 };
