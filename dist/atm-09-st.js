@@ -111,12 +111,12 @@ var toolkit = toolkit || {};
      * @param degrees move direction based on base
      * @param distance move distance based on base
      */
-    utils.calclatePosition = function(base, degrees, distance) {
+    utils.calculatePosition = function(base, degrees, distance) {
       //TODO degrees is convert fightcodenize
       var rad = utils.toRudian(degrees);
       return {
-        x: Math.round(base.x + Math.cos(rad) * distance),
-        y: Math.round(base.y + Math.sin(rad) * distance)
+        x: base.x + Math.cos(rad) * distance,
+        y: base.y + Math.sin(rad) * distance
       };
     };
 
@@ -439,13 +439,16 @@ Robot.prototype.onScannedRobot = function(ev) {
   radar.mark(target);
   robot.stop();
 
-  for (var i = 0; i < 5; i++) {
+  for (var i = 0; i < 3; i++) {
     robot.fire();
-    robot.ahead(3);
-    var dest = utils.calclatePosition(robot.position, robot.angle, 3);
-    var angle = utils.calclateAngle(dest, target.position);
-    command.turnCannonTo(robot, angle);
   }
+  log('ahead before', robot.position);
+  robot.ahead(10);
+  log('ahead after', robot.position);
+  var dest = utils.calculatePosition(robot.position, robot.angle, 10);
+  var angle = utils.calculateCannonAngle(dest, target.position);
+  command.turnCannonTo(robot, angle);
+  log('robot.position', robot.position, 'dest', dest, 'robot.cannonAbsoluteAngle', robot.cannonAbsoluteAngle, 'angle', angle);
   // var relativeAngle = utils.deltaAngle(robot.angle, robot.cannonAbsoluteAngle);
   // robot.turn(relativeAngle);
   // robot.rotateCannon(-relativeAngle);

@@ -111,12 +111,12 @@ var toolkit = toolkit || {};
      * @param degrees move direction based on base
      * @param distance move distance based on base
      */
-    utils.calclatePosition = function(base, degrees, distance) {
+    utils.calculatePosition = function(base, degrees, distance) {
       //TODO degrees is convert fightcodenize
       var rad = utils.toRudian(degrees);
       return {
-        x: Math.round(base.x + Math.cos(rad) * distance),
-        y: Math.round(base.y + Math.sin(rad) * distance)
+        x: base.x + Math.cos(rad) * distance,
+        y: base.y + Math.sin(rad) * distance
       };
     };
 
