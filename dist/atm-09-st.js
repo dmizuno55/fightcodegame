@@ -33,6 +33,7 @@ var toolkit = toolkit || {};
     var time = 0;
     clock.tick = function() {
       time++;
+      toolkit.ns('clock.event').emit(time);
     };
 
     clock.now = function() {
@@ -43,6 +44,26 @@ var toolkit = toolkit || {};
       time = 0;
     };
   })(toolkit.ns('clock'));
+
+  (function(event) {
+    var sequence = 0;
+    var handlers = {};
+
+    event.on = function(handler) {
+      var id = 'event' + sequence++;
+      handlers[id] = handler;
+    };
+
+    event.off = function(id) {
+      delete handlers[id];
+    }
+
+    event.emit = function(now) {
+      Object.keys(handlers).forEach(function(id) {
+        handlers[id].call(null, now);
+      })
+    }
+  })(toolkit.ns('clock.event'));
 
   /**
    * utils
@@ -99,8 +120,10 @@ var toolkit = toolkit || {};
 
     utils.splitDegrees = function(degrees, unit) {
       var result = [];
-      for (var i = 0, count = Math.floor(degrees / unit); i < count; i++) {
-        result.push(unit);
+      var sign = degrees > 0 ? 1 : -1;
+      var count = Math.floor(Math.abs(degrees) / unit);
+      for (var i = 0; i < count; i++) {
+        result.push(unit * sign);
       }
       result.push(degrees % unit);
       return result;
@@ -151,9 +174,9 @@ var toolkit = toolkit || {};
     }
 
     logger.get = function (context, robot) {
-      var clock = toolkit.ns('clock');
       return function(_opts) {
-        var message = clock.now() + ' ' + robot.id + ' [' + context + '] ' + buildMessage_(arguments);
+        var args = Array.prototype.slice.call(arguments);
+        var message = toolkit.now() + ' ' + robot.id + ' [' + context + '] ' + buildMessage_(args);
         if (!isLogged_(message)) {
           return;
         }
@@ -204,6 +227,17 @@ var toolkit = toolkit || {};
       return robots[id];
     };
 
+    status.list = function() {
+      var list = [];
+      Object.keys(robots).forEach(function(id) {
+        list.push({
+          id: id,
+          sts: robots[id]
+        });
+      });
+      return list;
+    };
+
     status.toString = function() {
       return JSON.stringify(robots);
     };
@@ -220,13 +254,12 @@ var toolkit = toolkit || {};
     var robots = {};
 
     radar.mark = function(robot) {
-      var clock = toolkit.ns('clock');
       var prev = robots[robot.id];
       robots[robot.id] = {
         robot: robot,
-        updatedTime: clock.now()
+        updatedTime: toolkit.now()
       };
-      if (prev && prev.updatedTime - clock.now() < 30) {
+      if (prev && prev.updatedTime - toolkit.now() < 30) {
         robots[robot.id].prev = {
           robot: prev.robot,
           updatedTime: prev.updatedTime
@@ -248,12 +281,11 @@ var toolkit = toolkit || {};
     };
 
     radar.searchClosest = function(me) {
-      var clock = toolkit.ns('clock');
       var utils = toolkit.ns('utils');
       var log = toolkit.getLogger('radar.searchClosest', me);
       var list = Object.keys(robots).filter(function(id) {
         var target = robots[id];
-        return (clock.now() - target.updatedTime) <= 100;
+        return (toolkit.now() - target.updatedTime) <= 100;
       }).sort(function(t1, t2) {
         var mPos = me.position;
         var tPos1 = robots[t1].robot.position;
@@ -273,13 +305,11 @@ var toolkit = toolkit || {};
     }
 
     radar.searchLeader = function(me) {
-      var clock = toolkit.ns('clock');
       var utils = toolkit.ns('utils');
-      var logger = toolkit.ns('logger');
       var log = toolkit.getLogger('radar.searchLeader', me);
       var list = Object.keys(robots).filter(function(id) {
         var target = robots[id];
-        if (clock.now() - target.updatedTime <= 100) {
+        if (toolkit.now() - target.updatedTime <= 100) {
           if (target.robot.parentId === null) {
             return true;
           }
@@ -355,7 +385,6 @@ var toolkit = toolkit || {};
       var mPos = robot.position;
       var degrees = utils.calculateAngle(mPos, dest);
       log('curr', mPos, 'dest', dest, 'degrees', degrees);
-      command.turnTo(robot, degrees + offset);
       command.turnCannonTo(robot, degrees + offset);
     };
 
@@ -373,28 +402,36 @@ var toolkit = toolkit || {};
 
   // alias
   toolkit.getLogger = toolkit.ns('logger').get;
+  toolkit.getStatus = toolkit.ns('status').get;
+  toolkit.tick = toolkit.ns('clock').tick;
+  toolkit.now = toolkit.ns('clock').now;
 })();
 
 //FightCode can only understand your robot
 //if its class is called Robot
 var Robot = function(robot) {
   toolkit.ns('logger').filter(/\[Robot/);
+  toolkit.ns('clock.event').on(function(now) {
+    if (now % 50 === 0) {
+      var status = toolkit.ns('status');
+      status.list.forEach(function(elem) {
+        elem.sts.direction *= -1;
+      });
+    }
+  });
   robot.clone();
 };
 
 Robot.prototype.onIdle = function(ev) {
-  // load toolkit
-  var status = toolkit.ns('status'),
-      clock = toolkit.ns('clock'),
-      utils = toolkit.ns('utils'),
+  toolkit.tick();
+
+  var utils = toolkit.ns('utils'),
       radar = toolkit.ns('radar'),
       command = toolkit.ns('command');
 
-  clock.tick();
-
-  var log = toolkit.getLogger('Robot.onIdle', robot);
   var robot = ev.robot;
-  var sts = status.get(robot.id);
+  var log = toolkit.getLogger('Robot.onIdle', robot);
+  var sts = toolkit.getStatus(robot.id);
 
   sts.idle();
   if (sts.robotFound) {
@@ -417,18 +454,16 @@ Robot.prototype.onIdle = function(ev) {
 };
 
 Robot.prototype.onScannedRobot = function(ev) {
-  var status = toolkit.ns('status'),
-      clock = toolkit.ns('clock'),
-      utils = toolkit.ns('utils'),
+  toolkit.tick();
+
+  var utils = toolkit.ns('utils'),
       command = toolkit.ns('command'),
       radar = toolkit.ns('radar');
 
-  clock.tick();
-
   var robot = ev.robot;
-  var target = ev.scannedRobot;
   var log = toolkit.getLogger('Robot.onScannedRobot', robot);
-  var sts = status.get(robot.id);
+  var sts = toolkit.getStatus(robot.id);
+  var target = ev.scannedRobot;
 
   if (utils.isBuddy(robot, target)) {
     robot.back(10);
@@ -437,19 +472,12 @@ Robot.prototype.onScannedRobot = function(ev) {
 
   sts.encount();
   radar.mark(target);
-  robot.stop();
+  // robot.stop();
 
-  for (var i = 0; i < 3; i++) {
-    robot.fire();
-  }
-  log('ahead before', robot.position);
-  robot.ahead(10);
-  log('ahead after', robot.position);
-  var dest = utils.calculatePosition(robot.position, robot.angle, 10);
-  var angle = utils.calculateCannonAngle(dest, target.position);
-  command.turnCannonTo(robot, angle);
-  log('robot.position', robot.position, 'dest', dest, 'robot.cannonAbsoluteAngle', robot.cannonAbsoluteAngle, 'angle', angle);
-  // var relativeAngle = utils.deltaAngle(robot.angle, robot.cannonAbsoluteAngle);
+  // for (var i = 0; i < 3; i++) {
+  //   robot.fire();
+  // }
+  var relativeAngle = utils.deltaAngle(robot.angle, robot.cannonAbsoluteAngle);
   // robot.turn(relativeAngle);
   // robot.rotateCannon(-relativeAngle);
   // var degrees = utils.splitDegrees(frontAngle, 10)[0];
@@ -459,28 +487,47 @@ Robot.prototype.onScannedRobot = function(ev) {
   //   robot.fire();
   //   //robot.move(5, (i % 2 === 0 ? 1 : -1));
   // }
-  // utils.splitDegrees(relativeAngle, 10).forEach(function(degrees) {
+  utils.splitDegrees(relativeAngle, 30).forEach(function(degrees) {
+    robot.fire();
+    robot.turn(degrees);
+    robot.rotateCannon(-degrees);
+  });
+
+  // for (var i = 0; i < 4; i++) {
+  //   var dir = i % 2 === 0 ? 1 : -1;
   //   robot.fire();
-  //   robot.turn(degrees);
-  //   robot.rotateCannon(-degrees);
-  // });
+  //   robot.rotateCannon(dir * 3);
+  // }
+
+  var dest = utils.calculatePosition(robot.position, robot.angle, 10);
+  var angle = utils.calculateCannonAngle(dest, target.position);
+  robot.move(sts.direction * 10);
+  command.turnCannonTo(robot, angle);
+  robot.fire();
+
+
   // log('angle', robot.angle, 'cannonRelativeAngle', robot.cannonRelativeAngle, 'relativeAngle', relativeAngle);
+  // log('ahead before', robot.position);
+  // robot.ahead(10);
+  // log('ahead after', robot.position);
+  // var dest = utils.calculatePosition(robot.position, robot.angle, 10);
+  // var angle = utils.calculateCannonAngle(dest, target.position);
+  // command.turnCannonTo(robot, angle);
+  // log('robot.position', robot.position, 'dest', dest, 'robot.cannonAbsoluteAngle', robot.cannonAbsoluteAngle, 'angle', angle);
 };
 
 Robot.prototype.onRobotCollision = function(ev) {
-  var utils = toolkit.ns('utils'),
-      clock = toolkit.ns('clock'),
-      radar = toolkit.ns('radar'),
-      command = toolkit.ns('command'),
-      status = toolkit.ns('status');
+  toolkit.tick();
 
-  clock.tick();
+  var utils = toolkit.ns('utils'),
+      radar = toolkit.ns('radar'),
+      command = toolkit.ns('command');
 
   var robot = ev.robot;
-  var sts = status.get(robot);
-  var collidedRobot = ev.collidedRobot;
-
   var log = toolkit.getLogger('Robot.onRobotCollision', robot);
+  var sts = toolkit.getStatus(robot.id);
+
+  var collidedRobot = ev.collidedRobot;
 
   if (!utils.isBuddy(robot, collidedRobot)) {
     sts.encout();
@@ -497,11 +544,10 @@ Robot.prototype.onRobotCollision = function(ev) {
 };
 
 Robot.prototype.onHitByBullet = function(ev) {
-  var clock = toolkit.ns('clock'),
-      utils = toolkit.ns('utils'),
-      command = toolkit.ns('command');
+  toolkit.tick();
 
-  clock.tick();
+  var utils = toolkit.ns('utils'),
+      command = toolkit.ns('command');
 
   var robot = ev.robot;
   var log = toolkit.getLogger('Robot.onHitByBullet', robot);
@@ -510,17 +556,23 @@ Robot.prototype.onHitByBullet = function(ev) {
     robot.disappear();
   }
 
-  // TODO cannon turn to it.
-  log('angle', robot.angle, 'bearing', ev.bearing);
-  command.turnTo(robot, robot.angle + ev.bearing -robot.cannonRelativeAngle + 90);
+  log('angle', robot.angle, 'cannonAbsoluteAngle', robot.cannonAbsoluteAngle, 'bearing', ev.bearing);
+  // convert into cannon absolute angle
+  var targetDegrees = robot.angle + ev.bearing + 90;
+  log('absoluteDegrees', targetDegrees);
+  command.turnCannonTo(robot, targetDegrees);
 };
 
 Robot.prototype.onWallCollision = function(ev) {
+  toolkit.tick();
+
   var robot = ev.robot;
-
-  toolkit.ns('clock').tick();
-
   var log = toolkit.getLogger('Robot.onWallCollision', robot);
+  var sts = toolkit.getStatus(robot.id);
+
+  if (sts.robotFound) {
+    return;
+  }
 
   log('angle', robot.angle, 'bearing', ev.bearing);
   robot.turn(90 + ev.bearing);

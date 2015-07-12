@@ -33,6 +33,7 @@ var toolkit = toolkit || {};
     var time = 0;
     clock.tick = function() {
       time++;
+      toolkit.ns('clock.event').emit(time);
     };
 
     clock.now = function() {
@@ -43,6 +44,26 @@ var toolkit = toolkit || {};
       time = 0;
     };
   })(toolkit.ns('clock'));
+
+  (function(event) {
+    var sequence = 0;
+    var handlers = {};
+
+    event.on = function(handler) {
+      var id = 'event' + sequence++;
+      handlers[id] = handler;
+    };
+
+    event.off = function(id) {
+      delete handlers[id];
+    }
+
+    event.emit = function(now) {
+      Object.keys(handlers).forEach(function(id) {
+        handlers[id].call(null, now);
+      })
+    }
+  })(toolkit.ns('clock.event'));
 
   /**
    * utils
@@ -99,8 +120,10 @@ var toolkit = toolkit || {};
 
     utils.splitDegrees = function(degrees, unit) {
       var result = [];
-      for (var i = 0, count = Math.floor(degrees / unit); i < count; i++) {
-        result.push(unit);
+      var sign = degrees > 0 ? 1 : -1;
+      var count = Math.floor(Math.abs(degrees) / unit);
+      for (var i = 0; i < count; i++) {
+        result.push(unit * sign);
       }
       result.push(degrees % unit);
       return result;
@@ -151,9 +174,9 @@ var toolkit = toolkit || {};
     }
 
     logger.get = function (context, robot) {
-      var clock = toolkit.ns('clock');
       return function(_opts) {
-        var message = clock.now() + ' ' + robot.id + ' [' + context + '] ' + buildMessage_(arguments);
+        var args = Array.prototype.slice.call(arguments);
+        var message = toolkit.now() + ' ' + robot.id + ' [' + context + '] ' + buildMessage_(args);
         if (!isLogged_(message)) {
           return;
         }
@@ -204,6 +227,17 @@ var toolkit = toolkit || {};
       return robots[id];
     };
 
+    status.list = function() {
+      var list = [];
+      Object.keys(robots).forEach(function(id) {
+        list.push({
+          id: id,
+          sts: robots[id]
+        });
+      });
+      return list;
+    };
+
     status.toString = function() {
       return JSON.stringify(robots);
     };
@@ -220,13 +254,12 @@ var toolkit = toolkit || {};
     var robots = {};
 
     radar.mark = function(robot) {
-      var clock = toolkit.ns('clock');
       var prev = robots[robot.id];
       robots[robot.id] = {
         robot: robot,
-        updatedTime: clock.now()
+        updatedTime: toolkit.now()
       };
-      if (prev && prev.updatedTime - clock.now() < 30) {
+      if (prev && prev.updatedTime - toolkit.now() < 30) {
         robots[robot.id].prev = {
           robot: prev.robot,
           updatedTime: prev.updatedTime
@@ -248,12 +281,11 @@ var toolkit = toolkit || {};
     };
 
     radar.searchClosest = function(me) {
-      var clock = toolkit.ns('clock');
       var utils = toolkit.ns('utils');
       var log = toolkit.getLogger('radar.searchClosest', me);
       var list = Object.keys(robots).filter(function(id) {
         var target = robots[id];
-        return (clock.now() - target.updatedTime) <= 100;
+        return (toolkit.now() - target.updatedTime) <= 100;
       }).sort(function(t1, t2) {
         var mPos = me.position;
         var tPos1 = robots[t1].robot.position;
@@ -273,13 +305,11 @@ var toolkit = toolkit || {};
     }
 
     radar.searchLeader = function(me) {
-      var clock = toolkit.ns('clock');
       var utils = toolkit.ns('utils');
-      var logger = toolkit.ns('logger');
       var log = toolkit.getLogger('radar.searchLeader', me);
       var list = Object.keys(robots).filter(function(id) {
         var target = robots[id];
-        if (clock.now() - target.updatedTime <= 100) {
+        if (toolkit.now() - target.updatedTime <= 100) {
           if (target.robot.parentId === null) {
             return true;
           }
@@ -355,7 +385,6 @@ var toolkit = toolkit || {};
       var mPos = robot.position;
       var degrees = utils.calculateAngle(mPos, dest);
       log('curr', mPos, 'dest', dest, 'degrees', degrees);
-      command.turnTo(robot, degrees + offset);
       command.turnCannonTo(robot, degrees + offset);
     };
 
@@ -373,4 +402,7 @@ var toolkit = toolkit || {};
 
   // alias
   toolkit.getLogger = toolkit.ns('logger').get;
+  toolkit.getStatus = toolkit.ns('status').get;
+  toolkit.tick = toolkit.ns('clock').tick;
+  toolkit.now = toolkit.ns('clock').now;
 })();

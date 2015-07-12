@@ -15,7 +15,6 @@ describe('radar', function() {
     var robot = createRobot('getMe', null, pos);
     robot.arenaWidth = 395;
     robot.arenaHeight = 480;
-    robot.log = function() {};
     return robot;
   }
   function getBoss(pos) {

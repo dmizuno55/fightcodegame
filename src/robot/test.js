@@ -2,6 +2,14 @@
 //if its class is called Robot
 var Robot = function(robot) {
   toolkit.ns('logger').filter(/(turnTo|turnCannonTo|onScannedRobot)\]/);
+  toolkit.ns('clock.event').on(function(now) {
+    if (now % 50 === 0) {
+      var status = toolkit.ns('status');
+      status.list.forEach(function(elem) {
+        elem.sts.direction *= -1;
+      });
+    }
+  });
 };
 
 Robot.prototype.onIdle = function(ev) {
@@ -20,6 +28,8 @@ Robot.prototype.onIdle = function(ev) {
 
   log('idle');
   robot.rotateCannon(10);
+
+  robot.move(sts.direction * 100);
 };
 
 Robot.prototype.onScannedRobot = function(ev) {
