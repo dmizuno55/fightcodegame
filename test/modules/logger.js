@@ -12,38 +12,45 @@ describe('logger', function() {
     };
   });
 
+  afterEach(function() {
+    toolkit.ns('logger').setLevel('INFO');
+  });
+
   it('output log', function() {
     var log = toolkit.getLogger('context', robot);
-    log('hoge', {name: 'hoge', age: 20});
+    log.info('hoge', {name: 'hoge', age: 20});
+    toolkit.ns('logger').flush();
   });
 
-  it('filter passed log', function() {
-    toolkit.ns('logger').filter(/hoge/);
+  it('call leveling log lower than setting level', function() {
+    toolkit.ns('logger').setLevel('INFO');
 
-    var result = false;
+    var called = false;
     var r = {
       log: function(message) {
-        result = true;
-      }
-    };
-    
-    var log = toolkit.getLogger('context', r);
-    log('hoge', {name: 'hoge', age: 20});
-    assert(result, 'must be called.');
-  });
-
-  it('filter no passed log', function() {
-    toolkit.ns('logger').filter(/fuga/);
-
-    var result = true;
-    var r = {
-      log: function(message) {
-        result = false;
+        called = true;
       }
     };
 
-    var log = toolkit.getLogger('context', r);
-    log('hoge', {name: 'hoge', age: 20});
-    assert(result, 'must not be called.');
+    var log = toolkit.getLogger('context');
+    log.debug('hoge', {name: 'hoge', age: 20});
+    toolkit.ns('logger').flush(r);
+    assert(!called, 'must not be called.');
+  });
+
+  it('call leveling log higher than setting level', function() {
+    toolkit.ns('logger').setLevel('INFO');
+
+    var called = false;
+    var r = {
+      log: function(message) {
+        called = true;
+      }
+    };
+
+    var log = toolkit.getLogger('context');
+    log.warn('hoge', {name: 'hoge', age: 20});
+    toolkit.ns('logger').flush(r);
+    assert(called, 'must be called.');
   });
 });

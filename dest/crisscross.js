@@ -26,6 +26,43 @@ var toolkit = toolkit || {};
     };
   })();
 
+  (function(proxy) {
+    proxy.getDefaultProxy = function(handlers, event) {
+      var originalHandler = handlers[event];
+      return function(ev) {
+        // tick time
+        toolkit.tick();
+
+        var log = toolkit.getLogger('Robot.' + event);
+
+        // log start
+        log.debug('start');
+
+        // call original handler
+        try {
+          originalHandler.apply(handlers, [ev]);
+        } catch (e) {
+          var errMsg = e.stack ? e.stack : e;
+          log.error('catch error:', errMsg);
+        }
+
+        // log end
+        log.debug('end');
+
+        // flush log
+        toolkit.ns('logger').flush(ev.robot);
+      }
+    };
+
+    proxy.setup = function(handlers) {
+      var event;
+      for (event in handlers) {
+        var handler = handlers[event];
+        handlers[event] = proxy.getDefaultProxy(handlers, event);
+      }
+    };
+  })(toolkit.ns('proxy'));
+
   /**
    * clock
    */
@@ -150,47 +187,85 @@ var toolkit = toolkit || {};
     utils.toRudian = function(degrees) {
       return Math.PI / 180 * degrees;
     };
+
+    utils.fuzzyAngle = function(variable, baseline, accuracy) {
+      accuracy = accuracy || 10;
+      var upper = baseline + accuracy;
+      var lower = baseline - accuracy;
+      if (lower < 0) {
+        variable = variable > upper ? variable - 360 : variable;
+      }
+      return upper >= variable && lower <= variable;
+    };
   })(toolkit.ns('utils'));
 
   (function(logger) {
-    var pattern = null;
-    function isLogged_(message) {
-      if (pattern && !pattern.test(message)) {
-        return false;
-      }
-      return true;
-    }
+    var LOG_LEVELS = {
+      DEBUG: 0,
+      INFO: 1,
+      WARN: 2,
+      ERROR: 3
+    };
+    var level_ = LOG_LEVELS.INFO;
+    var buffers_ = [];
 
-    function buildMessage_(messages) {
-        var i, msg = [];
-        for (i = 0; i < messages.length; i++) {
-          if (typeof messages[i] === 'object') {
-            msg.push(JSON.stringify(messages[i]));
-          } else {
-            msg.push(messages[i]);
-          }
-        }
-        return msg.join(' ');
-    }
-
-    logger.get = function (context, robot) {
-      return function(_opts) {
-        var args = Array.prototype.slice.call(arguments);
-        var message = toolkit.now() + ' ' + robot.id + ' [' + context + '] ' + buildMessage_(args);
-        if (!isLogged_(message)) {
-          return;
-        }
-        if (robot.log) {
-          robot.log(message);
+    function buildMessage_(args) {
+      var i, msg = [];
+      for (i = 0; i < args.length; i++) {
+        if (typeof args[i] === 'object') {
+          msg.push(JSON.stringify(args[i]));
         } else {
-          console.log(message);
+          msg.push(args[i]);
+        }
+      }
+      return msg.join(' ');
+    }
+
+    function write_(message, robot) {
+      if (robot && robot.log) {
+        robot.log(message);
+      } else {
+        console.log(message);
+      }
+    }
+
+    function log_(context, levelLabel, args) {
+      if (level_ > LOG_LEVELS[levelLabel]) {
+        return;
+      }
+      var message = '[' + levelLabel + '] ' + toolkit.now() + ' ' + context + ': ' + buildMessage_(args);
+      buffers_.push(message);
+    }
+
+    logger.get = function (context) {
+      return {
+        debug: function() {
+          log_(context, 'DEBUG', Array.prototype.slice.call(arguments));
+        },
+        info: function() {
+          log_(context, 'INFO', Array.prototype.slice.call(arguments));
+        },
+        warn: function() {
+          log_(context, 'WARN', Array.prototype.slice.call(arguments));
+        },
+        error: function() {
+          log_(context, 'ERROR', Array.prototype.slice.call(arguments));
         }
       };
     };
 
-    logger.filter = function(ptn) {
-      pattern = ptn;
-    }
+    logger.setLevel = function(levelLabel) {
+      if (LOG_LEVELS[levelLabel] !== undefined) {
+        level_ = LOG_LEVELS[levelLabel];
+      }
+    };
+
+    logger.flush = function(robot) {
+      var message;
+      while (message = buffers_.shift()) {
+        write_(message, robot);
+      }
+    };
   })(toolkit.ns('logger'));
 
   /**
@@ -201,11 +276,11 @@ var toolkit = toolkit || {};
       this.robotFound = false;
       this.idleCount = 0;
       this.direction = 1;
-      this.turnDirection = 1;
       this.initialized = false;
     }
-    Status.prototype.init = function(direction) {
-      this.direction = direction;
+    Status.prototype.init = function(conf) {
+      conf = conf || {};
+      this.direction = conf.direction || direction;
       this.initialized = true;
     };
     Status.prototype.idle = function() {
@@ -218,32 +293,35 @@ var toolkit = toolkit || {};
       this.idleCount = 0;
       this.robotFound = true;
     };
+    Status.prototype.reverseDirection = function() {
+      this.direction *= -1;
+    };
 
-    var robots = {};
+    var robots_ = {};
     status.get = function(id) {
-      if (!robots[id]) {
-        robots[id] = new Status();
+      if (!robots_[id]) {
+        robots_[id] = new Status();
       }
-      return robots[id];
+      return robots_[id];
     };
 
     status.list = function() {
       var list = [];
-      Object.keys(robots).forEach(function(id) {
+      Object.keys(robots_).forEach(function(id) {
         list.push({
           id: id,
-          sts: robots[id]
+          sts: robots_[id]
         });
       });
       return list;
     };
 
     status.toString = function() {
-      return JSON.stringify(robots);
+      return JSON.stringify(robots_);
     };
 
     status.clear = function() {
-      robots = {};
+      robots_ = {};
     };
   })(toolkit.ns('status'));
 
@@ -251,45 +329,45 @@ var toolkit = toolkit || {};
    * radar
    */
   (function(radar) {
-    var robots = {};
+    var robots_ = {};
 
     radar.mark = function(robot) {
-      var prev = robots[robot.id];
-      robots[robot.id] = {
+      var prev = robots_[robot.id];
+      robots_[robot.id] = {
         robot: robot,
         updatedTime: toolkit.now()
       };
       if (prev && prev.updatedTime - toolkit.now() < 30) {
-        robots[robot.id].prev = {
+        robots_[robot.id].prev = {
           robot: prev.robot,
           updatedTime: prev.updatedTime
         };
       }
-      return robots[robot.id];
+      return robots_[robot.id];
     };
 
     radar.getMarker = function(robot) {
-      return robots[robot.id];
+      return robots_[robot.id];
     };
 
     radar.unmark = function(robot) {
-      delete robots[robot.id];
+      delete robots_[robot.id];
     };
 
     radar.reset = function() {
-      robots = [];
+      robots_ = [];
     };
 
     radar.searchClosest = function(me) {
       var utils = toolkit.ns('utils');
-      var log = toolkit.getLogger('radar.searchClosest', me);
-      var list = Object.keys(robots).filter(function(id) {
-        var target = robots[id];
+      var log = toolkit.getLogger('radar.searchClosest');
+      var list = Object.keys(robots_).filter(function(id) {
+        var target = robots_[id];
         return (toolkit.now() - target.updatedTime) <= 100;
       }).sort(function(t1, t2) {
         var mPos = me.position;
-        var tPos1 = robots[t1].robot.position;
-        var tPos2 = robots[t2].robot.position;
+        var tPos1 = robots_[t1].robot.position;
+        var tPos2 = robots_[t2].robot.position;
         var dx1 = Math.abs(mPos.x - tPos1.x);
         var dy1 = Math.abs(mPos.y - tPos1.y);
         var dx2 = Math.abs(mPos.x - tPos2.x);
@@ -300,15 +378,15 @@ var toolkit = toolkit || {};
           return 1;
         }
       });
-      log(list);
-      return list.length === 0 ? null : robots[list[0]];
+      log.debug(list);
+      return list.length === 0 ? null : robots_[list[0]];
     }
 
     radar.searchLeader = function(me) {
       var utils = toolkit.ns('utils');
-      var log = toolkit.getLogger('radar.searchLeader', me);
-      var list = Object.keys(robots).filter(function(id) {
-        var target = robots[id];
+      var log = toolkit.getLogger('radar.searchLeader');
+      var list = Object.keys(robots_).filter(function(id) {
+        var target = robots_[id];
         if (toolkit.now() - target.updatedTime <= 100) {
           if (target.robot.parentId === null) {
             return true;
@@ -316,8 +394,8 @@ var toolkit = toolkit || {};
         }
         return false;
       });
-      log(list);
-      return list.lenght === 0 ? null : robots[list[0]];
+      log.debug(list);
+      return list.lenght === 0 ? null : robots_[list[0]];
     }
 
     radar.forecast = function(marker) {
@@ -346,12 +424,12 @@ var toolkit = toolkit || {};
   (function(command) {
     command.trace = function(robot, dest) {
       var utils = toolkit.ns('utils');
-      var log = toolkit.getLogger('command.trace', robot);
+      var log = toolkit.getLogger('command.trace');
       var basePosition = robot.position;
       var degrees = utils.calclateAngle(basePosition, dest);
-      log('c.x=' + basePosition.x + ',c.y=' + basePosition.y + ',angle=' + robot.angle);
-      log('d.x=' + dest.x + ',d.y=' + dest.y);
-      log('degrees=' + degrees);
+      log.debug('c.x=' + basePosition.x + ',c.y=' + basePosition.y + ',angle=' + robot.angle);
+      log.debug('d.x=' + dest.x + ',d.y=' + dest.y);
+      log.debug('degrees=' + degrees);
       var length = Math.sqrt(Math.pow(basePosition.y - dest.y, 2) + Math.pow(basePosition.x - dest.x, 2));
       command.turnTo(robot, degrees);
       robot.ahead(length);
@@ -359,43 +437,42 @@ var toolkit = toolkit || {};
 
     command.turnToDest = function(robot, dest, offset) {
       var utils = toolkit.ns('utils');
-      var log = toolkit.getLogger('command.turnToDest', robot);
+      var log = toolkit.getLogger('command.turnToDest');
       offset = offset || 0;
       var mPos = robot.position;
       var degrees = utils.calculateAngle(mPos, dest);
-      log('curr', mPos, 'dest', dest, 'degrees', degrees);
+      log.debug('curr', mPos, 'dest', dest, 'degrees', degrees);
       command.turnTo(robot, degrees + offset);
     };
 
     command.turnTo = function(robot, degrees) {
       var utils = toolkit.ns('utils');
-      var log = toolkit.getLogger('command.turnTo', robot);
+      var log = toolkit.getLogger('command.turnTo');
       degrees = utils.deltaAngle(robot.angle, degrees);
       if (degrees !== 0) {
-        log('before', robot.angle, 'delta', degrees);
+        log.debug('before', robot.angle, 'delta', degrees);
         robot.turn(degrees);
-        log('after', robot.angle);
+        log.debug('after', robot.angle);
       }
     };
 
     command.turnCannonToDest = function(robot, dest, offset) {
       var utils = toolkit.ns('utils');
       offset = offset || 0;
-      var log = toolkit.getLogger('command.turnCannonToDest', robot);
+      var log = toolkit.getLogger('command.turnCannonToDest');
       var mPos = robot.position;
       var degrees = utils.calculateAngle(mPos, dest);
-      log('curr', mPos, 'dest', dest, 'degrees', degrees);
+      log.debug('curr', mPos, 'dest', dest, 'degrees', degrees);
       command.turnCannonTo(robot, degrees + offset);
     };
 
     command.turnCannonTo = function(robot, degrees) {
       var utils = toolkit.ns('utils');
-      var log = toolkit.getLogger('command.turnCannonTo', robot);
+      var log = toolkit.getLogger('command.turnCannonTo');
       degrees = utils.deltaAngle(robot.cannonAbsoluteAngle, degrees);
       if (degrees !== 0) {
-        log('before', robot.cannonAbsoluteAngle, 'delta', degrees);
+        log.debug('before', robot.cannonAbsoluteAngle, 'delta', degrees);
         robot.rotateCannon(degrees);
-        log('after', robot.cannonAbsoluteAngle);
       }
     };
   })(toolkit.ns('command'));
@@ -405,176 +482,54 @@ var toolkit = toolkit || {};
   toolkit.getStatus = toolkit.ns('status').get;
   toolkit.tick = toolkit.ns('clock').tick;
   toolkit.now = toolkit.ns('clock').now;
+  toolkit.setupHandlers = toolkit.ns('proxy').setup;
 })();
 
-//FightCode can only understand your robot
-//if its class is called Robot
 var Robot = function(robot) {
-  toolkit.ns('logger').filter(/\[Robot/);
-  toolkit.ns('clock.event').on(function(now) {
-    if (now % 50 === 0) {
-      var status = toolkit.ns('status');
-      status.list.forEach(function(elem) {
-        elem.sts.direction *= -1;
-      });
-    }
-  });
-  robot.clone();
+  this.direction = 1;
 };
 
 Robot.prototype.onIdle = function(ev) {
-  toolkit.tick();
-
-  var utils = toolkit.ns('utils'),
-      radar = toolkit.ns('radar'),
-      command = toolkit.ns('command');
-
+  var command = toolkit.ns('command');
   var robot = ev.robot;
-  var log = toolkit.getLogger('Robot.onIdle', robot);
-  var sts = toolkit.getStatus(robot.id);
-
-  sts.idle();
-  if (sts.robotFound) {
-    return;
+  if (robot.cannonRelativeAngle !== 180) {
+    robot.rotateCannon(90);
   }
 
-  if (!sts.initialized) {
-    utils.isClone(robot) ? sts.init(-1) : sts.init(1);
-  }
-
-  var target = radar.searchLeader(robot) || radar.searchClosest(robot);
-  if (target) {
-    robot.stop();
-    var targetPos = target.robot.position;
-    command.turnToDest(robot, targetPos, -robot.cannonRelativeAngle + 90);
-  } else {
-    robot.move(5 * sts.direction);
-    robot.rotateCannon(30 * sts.direction);
-  }
+  command.turnTo(robot, 90);
 };
 
 Robot.prototype.onScannedRobot = function(ev) {
-  toolkit.tick();
-
-  var utils = toolkit.ns('utils'),
-      command = toolkit.ns('command'),
-      radar = toolkit.ns('radar');
-
   var robot = ev.robot;
-  var log = toolkit.getLogger('Robot.onScannedRobot', robot);
-  var sts = toolkit.getStatus(robot.id);
-  var target = ev.scannedRobot;
-
-  if (utils.isBuddy(robot, target)) {
-    robot.back(10);
-    return;
-  }
-
-  sts.encount();
-  radar.mark(target);
-  // robot.stop();
-
-  // for (var i = 0; i < 3; i++) {
-  //   robot.fire();
-  // }
-  var relativeAngle = utils.deltaAngle(robot.angle, robot.cannonAbsoluteAngle);
-  // robot.turn(relativeAngle);
-  // robot.rotateCannon(-relativeAngle);
-  // var degrees = utils.splitDegrees(frontAngle, 10)[0];
-  // robot.turn(degrees);
-  // robot.rotateCannon(-degrees);
-  // for (var i = 0; i < 10; i++) {
-  //   robot.fire();
-  //   //robot.move(5, (i % 2 === 0 ? 1 : -1));
-  // }
-  utils.splitDegrees(relativeAngle, 30).forEach(function(degrees) {
+  var i;
+  for (i = 0; i < 5; i++) {
     robot.fire();
-    robot.turn(degrees);
-    robot.rotateCannon(-degrees);
-  });
-
-  // for (var i = 0; i < 4; i++) {
-  //   var dir = i % 2 === 0 ? 1 : -1;
-  //   robot.fire();
-  //   robot.rotateCannon(dir * 3);
-  // }
-
-  var dest = utils.calculatePosition(robot.position, robot.angle, 10);
-  var angle = utils.calculateCannonAngle(dest, target.position);
-  robot.move(sts.direction * 10);
-  command.turnCannonTo(robot, angle);
-  robot.fire();
-
-
-  // log('angle', robot.angle, 'cannonRelativeAngle', robot.cannonRelativeAngle, 'relativeAngle', relativeAngle);
-  // log('ahead before', robot.position);
-  // robot.ahead(10);
-  // log('ahead after', robot.position);
-  // var dest = utils.calculatePosition(robot.position, robot.angle, 10);
-  // var angle = utils.calculateCannonAngle(dest, target.position);
-  // command.turnCannonTo(robot, angle);
-  // log('robot.position', robot.position, 'dest', dest, 'robot.cannonAbsoluteAngle', robot.cannonAbsoluteAngle, 'angle', angle);
+  }
 };
 
-Robot.prototype.onRobotCollision = function(ev) {
-  toolkit.tick();
-
-  var utils = toolkit.ns('utils'),
-      radar = toolkit.ns('radar'),
-      command = toolkit.ns('command');
-
+Robot.prototype.onWallCollision = function(ev) {
+  var utils = toolkit.ns('utils');
   var robot = ev.robot;
-  var log = toolkit.getLogger('Robot.onRobotCollision', robot);
-  var sts = toolkit.getStatus(robot.id);
-
-  var collidedRobot = ev.collidedRobot;
-
-  if (!utils.isBuddy(robot, collidedRobot)) {
-    sts.encout();
-    radar.mark(collidedRobot);
-  }
-
-  // TODO if colliedRobot is buddy, get out. if not, turn to it.
-  log('angle', robot.angle, 'bearing', ev.bearing);
-  if ((ev.bearing <= 30 && ev.bearing >= 0) || (ev.bearing >= -30 && ev.bearing <= 0)) {
-    robot.back(100);
-  } else if ((ev.bearing >= 150 && ev.bearing <= 180) || (ev.bearing <= -150 && ev.bearing >= -180)) {
-    robot.ahead(100);
+  if (utils.isClone(robot)) {
+    if (robot.angle === 0 || robot.angle === 180) {
+      robot.turn(ev.bearing);
+      robot.move(robot.arenaHeight, this.direction);
+      this.direction = this.direction * -1;
+    } else {
+      robot.turn(90 + ev.bearing);
+    }
+  } else {
+    if (robot.angle === 90 || robot.angle === 270) {
+      robot.turn(ev.bearing);
+      robot.move(robot.arenaWidth, this.direction);
+      this.direction = this.direction * -1;
+    } else {
+      robot.turn(90 + ev.bearing);
+    }
   }
 };
 
 Robot.prototype.onHitByBullet = function(ev) {
-  toolkit.tick();
-
-  var utils = toolkit.ns('utils'),
-      command = toolkit.ns('command');
-
   var robot = ev.robot;
-  var log = toolkit.getLogger('Robot.onHitByBullet', robot);
-
-  if (robot.parentId === null && robot.life <= 40) {
-    robot.disappear();
-  }
-
-  log('angle', robot.angle, 'cannonAbsoluteAngle', robot.cannonAbsoluteAngle, 'bearing', ev.bearing);
-  // convert into cannon absolute angle
-  var targetDegrees = robot.angle + ev.bearing + 90;
-  log('absoluteDegrees', targetDegrees);
-  command.turnCannonTo(robot, targetDegrees);
-};
-
-Robot.prototype.onWallCollision = function(ev) {
-  toolkit.tick();
-
-  var robot = ev.robot;
-  var log = toolkit.getLogger('Robot.onWallCollision', robot);
-  var sts = toolkit.getStatus(robot.id);
-
-  if (sts.robotFound) {
-    return;
-  }
-
-  log('angle', robot.angle, 'bearing', ev.bearing);
-  robot.turn(90 + ev.bearing);
-  robot.ahead(10);
+  robot.turn(ev.bearing);
 };

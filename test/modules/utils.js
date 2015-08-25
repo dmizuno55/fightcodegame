@@ -281,5 +281,115 @@ describe('utils', function() {
       assert(Math.round(result.x) === 2);
       assert(Math.round(result.y) === 0);
     });
+    it('degress 30. distance is negative value', function() {
+      var base = {x: 0, y: 0};
+      var result = utils.calculatePosition(base, 30, -2);
+      assert(Math.round(result.x) === -2);
+      assert(Math.round(result.y) === -1);
+    });
+    it('degress 60. distance is negative value', function() {
+      var base = {x: 0, y: 0};
+      var result = utils.calculatePosition(base, 60, -2);
+      assert(Math.round(result.x) === -1);
+      assert(Math.round(result.y) === -2);
+    });
+    it('degress 90. distance is negative value', function() {
+      var base = {x: 0, y: 0};
+      var result = utils.calculatePosition(base, 90, -2);
+      assert(Math.round(result.x) === 0);
+      assert(Math.round(result.y) === -2);
+    });
+    it('degress 120. distance is negative value', function() {
+      var base = {x: 0, y: 0};
+      var result = utils.calculatePosition(base, 120, -2);
+      assert(Math.round(result.x) === 1);
+      assert(Math.round(result.y) === -2);
+    });
+    it('degress 150. distance is negative value', function() {
+      var base = {x: 0, y: 0};
+      var result = utils.calculatePosition(base, 150, -2);
+      assert(Math.round(result.x) === 2);
+      assert(Math.round(result.y) === -1);
+    });
+    it('degress 180. distance is negative value', function() {
+      var base = {x: 0, y: 0};
+      var result = utils.calculatePosition(base, 180, -2);
+      assert(Math.round(result.x) === 2);
+      assert(Math.round(result.y) === 0);
+    });
+    it('degress 210. distance is negative value', function() {
+      var base = {x: 0, y: 0};
+      var result = utils.calculatePosition(base, 210, -2);
+      assert(Math.round(result.x) === 2);
+      assert(Math.round(result.y) === 1);
+    });
+    it('degress 240. distance is negative value', function() {
+      var base = {x: 0, y: 0};
+      var result = utils.calculatePosition(base, 240, -2);
+      assert(Math.round(result.x) === 1);
+      assert(Math.round(result.y) === 2);
+    });
+    it('degress 270. distance is negative value', function() {
+      var base = {x: 0, y: 0};
+      var result = utils.calculatePosition(base, 270, -2);
+      assert(Math.round(result.x) === 0);
+      assert(Math.round(result.y) === 2);
+    });
+    it('degress 300. distance is negative value', function() {
+      var base = {x: 0, y: 0};
+      var result = utils.calculatePosition(base, 300, -2);
+      assert(Math.round(result.x) === -1);
+      assert(Math.round(result.y) === 2);
+    });
+    it('degress 330. distance is negative value', function() {
+      var base = {x: 0, y: 0};
+      var result = utils.calculatePosition(base, 330, -2);
+      assert(Math.round(result.x) === -2);
+      assert(Math.round(result.y) === 1);
+    });
+    it('degress 360. distance is negative value', function() {
+      var base = {x: 0, y: 0};
+      var result = utils.calculatePosition(base, 360, -2);
+      assert(Math.round(result.x) === -2);
+      assert(Math.round(result.y) === 0);
+    });
+    it('degress 0. distance is negative value', function() {
+      var base = {x: 0, y: 0};
+      var result = utils.calculatePosition(base, 0, -2);
+      assert(Math.round(result.x) === -2);
+      assert(Math.round(result.y) === 0);
+    });
+  });
+
+  describe('fuzzyAngle', function() {
+    it('larger value in range', function() {
+      assert(utils.fuzzyAngle(190, 180, 10));
+    });
+    it('less value in range', function() {
+      assert(utils.fuzzyAngle(170, 180, 10));
+    });
+    it('equal value', function() {
+      assert(utils.fuzzyAngle(180, 180, 10));
+    });
+    it('larger value out of range', function() {
+      assert(!utils.fuzzyAngle(200, 180, 10));
+    });
+    it('less value out of range', function() {
+      assert(!utils.fuzzyAngle(160, 180, 10));
+    });
+    it('larger value in range. accuracy is omitted', function() {
+      assert(utils.fuzzyAngle(189, 180, 10));
+    });
+    it('less value in range. accuracy is omitted', function() {
+      assert(utils.fuzzyAngle(175, 180));
+    });
+    it('lower baseline is less than 0. and the value in range', function() {
+      assert(utils.fuzzyAngle(350, 0));
+      assert(utils.fuzzyAngle(10, 0));
+    });
+    it('lower baseline is less than 0. and the value out of range', function() {
+      assert(!utils.fuzzyAngle(340, 0));
+      assert(!utils.fuzzyAngle(20, 0));
+    });
   });
 });

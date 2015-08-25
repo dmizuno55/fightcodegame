@@ -4,15 +4,15 @@ module.exports = function(grunt) {
     concat: {
       atm09st: {
         src: ['src/modules/index.js', 'src/robot/atm-09-st.js'],
-        dest: 'dist/atm-09-st.js'
+        dest: 'dest/atm-09-st.js'
       },
       crisscross: {
         src: ['src/modules/index.js', 'src/robot/crisscross.js'],
-        dest: 'dist/crisscross.js'
+        dest: 'dest/crisscross.js'
       },
       test: {
         src: ['src/modules/index.js', 'src/robot/test.js'],
-        dest: 'dist/test.js'
+        dest: 'dest/test.js'
       }
     },
   });
