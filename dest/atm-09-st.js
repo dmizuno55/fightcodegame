@@ -1,3 +1,4 @@
+// TODO ES6 coding style
 var toolkit = toolkit || {};
 (function() {
   /**
@@ -27,7 +28,7 @@ var toolkit = toolkit || {};
   })();
 
   (function(proxy) {
-    proxy.getDefaultProxy = function(handlers, event) {
+    proxy.applyDefaultProxy = function(handlers, event) {
       var originalHandler = handlers[event];
       return function(ev) {
         // tick time
@@ -46,6 +47,9 @@ var toolkit = toolkit || {};
           log.error('catch error:', errMsg);
         }
 
+        var robot = ev.robot;
+        log.debug(robot.position, robot.angle, robot.cannonAbsoluteAngle);
+
         // log end
         log.debug('end');
 
@@ -57,8 +61,7 @@ var toolkit = toolkit || {};
     proxy.setup = function(handlers) {
       var event;
       for (event in handlers) {
-        var handler = handlers[event];
-        handlers[event] = proxy.getDefaultProxy(handlers, event);
+        handlers[event] = proxy.applyDefaultProxy(handlers, event);
       }
     };
   })(toolkit.ns('proxy'));
@@ -188,14 +191,14 @@ var toolkit = toolkit || {};
       return Math.PI / 180 * degrees;
     };
 
-    utils.fuzzyAngle = function(variable, baseline, accuracy) {
+    utils.inFuzzyAngle = function(target, median, accuracy) {
       accuracy = accuracy || 10;
-      var upper = baseline + accuracy;
-      var lower = baseline - accuracy;
+      var upper = median + accuracy;
+      var lower = median - accuracy;
       if (lower < 0) {
-        variable = variable > upper ? variable - 360 : variable;
+        target = target > upper ? target - 360 : target;
       }
-      return upper >= variable && lower <= variable;
+      return upper >= target && lower <= target;
     };
   })(toolkit.ns('utils'));
 
@@ -337,7 +340,7 @@ var toolkit = toolkit || {};
         robot: robot,
         updatedTime: toolkit.now()
       };
-      if (prev && prev.updatedTime - toolkit.now() < 30) {
+      if (prev && prev.updatedTime - toolkit.now() < 10) {
         robots_[robot.id].prev = {
           robot: prev.robot,
           updatedTime: prev.updatedTime
@@ -422,11 +425,15 @@ var toolkit = toolkit || {};
    * command
    */
   (function(command) {
-    command.trace = function(robot, dest) {
+    command.goTo = function(robot, dest) {
       var utils = toolkit.ns('utils');
-      var log = toolkit.getLogger('command.trace');
+      var log = toolkit.getLogger('command.goTo');
       var basePosition = robot.position;
-      var degrees = utils.calclateAngle(basePosition, dest);
+      if (Math.round(basePosition.x) === Math.round(dest.x) && Math.round(basePosition.y) === Math.round(dest.y)) {
+        log.debug('reach to destination');
+        return;
+      }
+      var degrees = utils.calculateAngle(basePosition, dest);
       log.debug('c.x=' + basePosition.x + ',c.y=' + basePosition.y + ',angle=' + robot.angle);
       log.debug('d.x=' + dest.x + ',d.y=' + dest.y);
       log.debug('degrees=' + degrees);
@@ -448,11 +455,10 @@ var toolkit = toolkit || {};
     command.turnTo = function(robot, degrees) {
       var utils = toolkit.ns('utils');
       var log = toolkit.getLogger('command.turnTo');
-      degrees = utils.deltaAngle(robot.angle, degrees);
-      if (degrees !== 0) {
-        log.debug('before', robot.angle, 'delta', degrees);
-        robot.turn(degrees);
-        log.debug('after', robot.angle);
+      var delta = utils.deltaAngle(robot.angle, degrees);
+      if (delta !== 0) {
+        log.debug('angle', robot.angle, 'to', degrees, 'delta', delta);
+        robot.turn(delta);
       }
     };
 
@@ -461,20 +467,21 @@ var toolkit = toolkit || {};
       offset = offset || 0;
       var log = toolkit.getLogger('command.turnCannonToDest');
       var mPos = robot.position;
-      var degrees = utils.calculateAngle(mPos, dest);
-      log.debug('curr', mPos, 'dest', dest, 'degrees', degrees);
+      var degrees = utils.calculateCannonAngle(mPos, dest);
+      log.debug('pos', mPos, 'dest', dest, 'degrees', degrees);
       command.turnCannonTo(robot, degrees + offset);
     };
 
     command.turnCannonTo = function(robot, degrees) {
       var utils = toolkit.ns('utils');
       var log = toolkit.getLogger('command.turnCannonTo');
-      degrees = utils.deltaAngle(robot.cannonAbsoluteAngle, degrees);
-      if (degrees !== 0) {
-        log.debug('before', robot.cannonAbsoluteAngle, 'delta', degrees);
-        robot.rotateCannon(degrees);
+      var delta = utils.deltaAngle(robot.cannonAbsoluteAngle, degrees);
+      if (delta !== 0) {
+        log.debug('angle', robot.cannonAbsoluteAngle, 'to', degrees, 'delta', delta);
+        robot.rotateCannon(delta);
       }
     };
+
   })(toolkit.ns('command'));
 
   // alias
@@ -482,7 +489,7 @@ var toolkit = toolkit || {};
   toolkit.getStatus = toolkit.ns('status').get;
   toolkit.tick = toolkit.ns('clock').tick;
   toolkit.now = toolkit.ns('clock').now;
-  toolkit.setupHandlers = toolkit.ns('proxy').setup;
+  toolkit.setupProxy = toolkit.ns('proxy').setup;
 })();
 
 //FightCode can only understand your robot
@@ -491,7 +498,7 @@ var Robot = function(robot) {
   toolkit.ns('logger').setLevel('DEBUG');
   robot.clone();
 
-  toolkit.setupHandlers(this);
+  toolkit.setupProxy(this);
 };
 
 Robot.prototype.onIdle = function(ev) {
@@ -504,27 +511,21 @@ Robot.prototype.onIdle = function(ev) {
   var sts = toolkit.getStatus(robot.id);
 
   if (!sts.initialized) {
-    utils.isClone(robot) ? sts.init({direction: -1}) : sts.init({direction: 1});
+    utils.isClone(robot) ? sts.init({direction: 1}) : sts.init({direction: 1});
   }
 
   sts.idle();
   if (sts.robotFound) {
-    // var marker = radar.searchLeader(robot) || radar.searchClosest(robot);
-    // if (marker) {
-    //   log.debug('robot found');
-    //   var targetPos = marker.robot.position;
-    //   command.turnToDest(robot, targetPos, -robot.cannonRelativeAngle + 90);
-    //   return;
-    // }
+    var marker = radar.searchLeader(robot) || radar.searchClosest(robot);
+    if (marker) {
+      log.debug('robot found');
+      var targetPos = marker.robot.position;
+      command.turnCannonToDest(robot, targetPos);
+      robot.fire();
+      return;
+    }
     return;
   }
-
-  log.debug(
-    'angle', robot.angle,
-    'offset-x', robot.position.x,
-    'offset-y', robot.position.y,
-    'offset-x\'', robot.arenaWidth - robot.position.x,
-    'offset-y\'', robot.arenaHeight - robot.position.y);
 
   var marker = radar.searchLeader(robot) || radar.searchClosest(robot);
   if (marker) {
@@ -532,27 +533,27 @@ Robot.prototype.onIdle = function(ev) {
     var targetPos = radar.forecast(marker);
     command.turnCannonToDest(robot, targetPos);
   } else {
-    robot.move(10, sts.direction);
     var position = robot.position;
-    // if (position.x < 20) {
-    //   log.debug('near left side wall', robot.angle, robot.cannonAbsoluteAngle);
-    //   command.turnCannonTo(robot, 180);
-    //   command.turnTo(robot, 0);
-    // } else if (robot.arenaWidth - position.x < 20) {
-    //   log.debug('near right side wall', robot.angle, robot.cannonAbsoluteAngle);
-    //   command.turnCannonTo(robot, 0);
-    //   command.turnTo(robot, 180);
-    // } else if (robot.y < 20) {
-    //   log.debug('near top side wall', robot.angle, robot.cannonAbsoluteAngle);
-    //   command.turnCannonTo(robot, 90);
-    //   command.turnTo(robot, 90);
-    // } else if (robot.arenaHeight - robot.y < 20) {
-    //   log.debug('near bottom side wall', robot.angle, robot.cannonAbsoluteAngle);
-    //   command.turnCannonTo(robot, 270);
-    //   command.turnTo(robot, 270);
-    // } else {
+    if (position.x < 20) {
+      log.debug('near left side wall', robot.angle, robot.cannonAbsoluteAngle);
+      command.turnCannonTo(robot, 180);
+      command.turnTo(robot, 0);
+    } else if (robot.arenaWidth - position.x < 20) {
+      log.debug('near right side wall', robot.angle, robot.cannonAbsoluteAngle);
+      command.turnCannonTo(robot, 0);
+      command.turnTo(robot, 180);
+    } else if (robot.y < 20) {
+      log.debug('near top side wall', robot.angle, robot.cannonAbsoluteAngle);
+      command.turnCannonTo(robot, 90);
+      command.turnTo(robot, 90);
+    } else if (robot.arenaHeight - robot.y < 20) {
+      log.debug('near bottom side wall', robot.angle, robot.cannonAbsoluteAngle);
+      command.turnCannonTo(robot, 270);
+      command.turnTo(robot, 270);
+    } else {
+      robot.move(10, sts.direction);
       robot.rotateCannon(5 * sts.direction);
-    // }
+    }
   }
 };
 
@@ -568,6 +569,8 @@ Robot.prototype.onScannedRobot = function(ev) {
   var sts = toolkit.getStatus(robot.id);
 
   if (utils.isBuddy(robot, target)) {
+    log.debug('scanned, but buddy');
+    sts.reverseDirection();
     robot.move(5, sts.direction);
     return;
   }
@@ -586,7 +589,7 @@ Robot.prototype.onScannedRobot = function(ev) {
   // robot.move(10, sts.direction);
   // command.turnCannonTo(robot, angle);
 
-  if (utils.fuzzyAngle(robot.cannonRelativeAngle, 0) || utils.fuzzyAngle(robot.cannonRelativeAngle, 180)) {
+  if (utils.inFuzzyAngle(robot.cannonRelativeAngle, 0) || utils.inFuzzyAngle(robot.cannonRelativeAngle, 180)) {
     log.debug('angle 0 or 180', robot.cannonRelativeAngle);
     robot.fire();
     var targetPos = target.position;
@@ -594,7 +597,6 @@ Robot.prototype.onScannedRobot = function(ev) {
     var angle = utils.calculateCannonAngle(dest, targetPos);
     robot.move(10, sts.direction);
     command.turnCannonTo(robot, angle);
-    robot.fire();
   } else {
     robot.fire();
     var relativeAngle = utils.deltaAngle(robot.angle, robot.cannonAbsoluteAngle);
@@ -673,5 +675,9 @@ Robot.prototype.onWallCollision = function(ev) {
   if (!sts.robotFound) {
     robot.turn(90);
     robot.move(10, sts.direction);
+  } else {
+    robot.turn(ev.bearing);
+    command.turnCannonTo(robot, -ev.bearing);
+    sts.reverseDirection();
   }
 };

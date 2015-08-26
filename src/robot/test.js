@@ -2,51 +2,70 @@
 //if its class is called Robot
 var Robot = function(robot) {
   toolkit.ns('logger').setLevel('DEBUG');
-  toolkit.setupHandlers(this);
+
+  toolkit.setupProxy(this);
 };
 
 Robot.prototype.onIdle = function(ev) {
+  var log = toolkit.getLogger('Robot.onIdle');
+  var command = toolkit.ns('command');
+
   var robot = ev.robot;
-  var sts = toolkit.getStatus(robot);
-  if (!sts.initialized) {
-    sts.init({direction: -1});
+  var sts = toolkit.getStatus(robot.id);
+  sts.idle();
+
+  command.goTo(robot, {x: robot.arenaWidth / 2, y: robot.arenaHeight / 2});
+  command.turnTo(robot, 90);
+  if (robot.cannonRelativeAngle !== 90) {
+    log.info(robot.cannonRelativeAngle);
+    robot.rotateCannon(90 - robot.cannonRelativeAngle);
   }
 
-  sts.idle();
-  if (!sts.robotFound)  {
-    robot.rotateCannon(10);
-  }
-  robot.move(10, sts.direction);
 };
 
 Robot.prototype.onScannedRobot = function(ev) {
-  var utils = toolkit.ns('utils');
+
   var log = toolkit.getLogger('Robot.onScannedRobot');
+  var radar = toolkit.ns('radar');
+
   var robot = ev.robot;
-  var sts = toolkit.getStatus(robot);
+  var target = ev.scannedRobot;
+  var sts = toolkit.getStatus(robot.id);
 
   sts.encount();
-  var relativeAngle = utils.deltaAngle(robot.angle, robot.cannonAbsoluteAngle);
-  log.debug('angle other', robot.angle, robot.cannonAbsoluteAngle, relativeAngle);
-  utils.splitDegrees(relativeAngle, 30).forEach(function(partOfAngle) {
-    robot.turn(partOfAngle);
-    robot.rotateCannon(-partOfAngle);
-  });
+  radar.mark(target);
+
 };
 
 Robot.prototype.onRobotCollision = function(ev) {
+
+  var log = toolkit.getLogger('Robot.onRobotCollision');
+  var radar = toolkit.ns('radar');
+
+  var robot = ev.robot;
+  var sts = toolkit.getStatus(robot.id);
+
+  var collidedRobot = ev.collidedRobot;
+
+  if (!utils.isBuddy(robot, collidedRobot)) {
+    sts.encount();
+    radar.mark(collidedRobot);
+  }
 };
 
 Robot.prototype.onHitByBullet = function(ev) {
+
+  var log = toolkit.getLogger('Robot.onHitByBullet', robot);
+
+  var robot = ev.robot;
+  var sts = toolkit.getStatus(robot.id);
+
 };
 
 Robot.prototype.onWallCollision = function(ev) {
-  var log = toolkit.getLogger('Robot.onWallCollisioin');
-  var robot = ev.robot;
-  var sts = toolkit.getStatus(robot);
-  var bearing = ev.bearing;
 
-  //robot.turn(bearing * -1 * sts.direction);
-  robot.turn(90);
-  log.debug('angle', robot.angle, 'bearing', bearing);
+  var log = toolkit.getLogger('Robot.onWallCollision', robot);
+
+  var robot = ev.robot;
+  var sts = toolkit.getStatus(robot.id);
 };

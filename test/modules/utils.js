@@ -361,35 +361,35 @@ describe('utils', function() {
     });
   });
 
-  describe('fuzzyAngle', function() {
+  describe('inFuzzyAngle', function() {
     it('larger value in range', function() {
-      assert(utils.fuzzyAngle(190, 180, 10));
+      assert(utils.inFuzzyAngle(190, 180, 10));
     });
     it('less value in range', function() {
-      assert(utils.fuzzyAngle(170, 180, 10));
+      assert(utils.inFuzzyAngle(170, 180, 10));
     });
     it('equal value', function() {
-      assert(utils.fuzzyAngle(180, 180, 10));
+      assert(utils.inFuzzyAngle(180, 180, 10));
     });
     it('larger value out of range', function() {
-      assert(!utils.fuzzyAngle(200, 180, 10));
+      assert(!utils.inFuzzyAngle(200, 180, 10));
     });
     it('less value out of range', function() {
-      assert(!utils.fuzzyAngle(160, 180, 10));
+      assert(!utils.inFuzzyAngle(160, 180, 10));
     });
     it('larger value in range. accuracy is omitted', function() {
-      assert(utils.fuzzyAngle(189, 180, 10));
+      assert(utils.inFuzzyAngle(189, 180, 10));
     });
     it('less value in range. accuracy is omitted', function() {
-      assert(utils.fuzzyAngle(175, 180));
+      assert(utils.inFuzzyAngle(175, 180));
     });
     it('lower baseline is less than 0. and the value in range', function() {
-      assert(utils.fuzzyAngle(350, 0));
-      assert(utils.fuzzyAngle(10, 0));
+      assert(utils.inFuzzyAngle(350, 0));
+      assert(utils.inFuzzyAngle(10, 0));
     });
     it('lower baseline is less than 0. and the value out of range', function() {
-      assert(!utils.fuzzyAngle(340, 0));
-      assert(!utils.fuzzyAngle(20, 0));
+      assert(!utils.inFuzzyAngle(340, 0));
+      assert(!utils.inFuzzyAngle(20, 0));
     });
   });
 });
