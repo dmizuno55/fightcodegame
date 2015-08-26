@@ -92,6 +92,7 @@ var toolkit = toolkit || {};
     event.on = function(handler) {
       var id = 'event' + sequence++;
       handlers[id] = handler;
+      return id;
     };
 
     event.off = function(id) {

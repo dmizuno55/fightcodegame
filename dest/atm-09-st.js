@@ -92,6 +92,7 @@ var toolkit = toolkit || {};
     event.on = function(handler) {
       var id = 'event' + sequence++;
       handlers[id] = handler;
+      return id;
     };
 
     event.off = function(id) {
@@ -511,7 +512,7 @@ Robot.prototype.onIdle = function(ev) {
   var sts = toolkit.getStatus(robot.id);
 
   if (!sts.initialized) {
-    utils.isClone(robot) ? sts.init({direction: 1}) : sts.init({direction: 1});
+    utils.isClone(robot) ? sts.init({direction: -1}) : sts.init({direction: 1});
   }
 
   sts.idle();
@@ -521,7 +522,6 @@ Robot.prototype.onIdle = function(ev) {
       log.debug('robot found');
       var targetPos = marker.robot.position;
       command.turnCannonToDest(robot, targetPos);
-      robot.fire();
       return;
     }
     return;
@@ -533,6 +533,7 @@ Robot.prototype.onIdle = function(ev) {
     var targetPos = radar.forecast(marker);
     command.turnCannonToDest(robot, targetPos);
   } else {
+    // TODO: define cannon rotate range min max, by position
     var position = robot.position;
     if (position.x < 20) {
       log.debug('near left side wall', robot.angle, robot.cannonAbsoluteAngle);
