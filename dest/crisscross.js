@@ -43,12 +43,12 @@ var toolkit = toolkit || {};
         try {
           originalHandler.apply(handlers, [ev]);
         } catch (e) {
-          var errMsg = e.stack ? e.stack : e;
-          log.error('catch error:', errMsg);
+          var message = e.stack ? e.stack : e;
+          log.error('catch error:', message);
         }
 
         var robot = ev.robot;
-        log.debug(robot.position, robot.angle, robot.cannonAbsoluteAngle);
+        log.debug(robot.id, robot.position, robot.angle, robot.cannonAbsoluteAngle);
 
         // log end
         log.debug('end');
@@ -201,6 +201,7 @@ var toolkit = toolkit || {};
       }
       return upper >= target && lower <= target;
     };
+
   })(toolkit.ns('utils'));
 
   (function(logger) {

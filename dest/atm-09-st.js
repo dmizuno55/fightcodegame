@@ -43,12 +43,12 @@ var toolkit = toolkit || {};
         try {
           originalHandler.apply(handlers, [ev]);
         } catch (e) {
-          var errMsg = e.stack ? e.stack : e;
-          log.error('catch error:', errMsg);
+          var message = e.stack ? e.stack : e;
+          log.error('catch error:', message);
         }
 
         var robot = ev.robot;
-        log.debug(robot.position, robot.angle, robot.cannonAbsoluteAngle);
+        log.debug(robot.id, robot.position, robot.angle, robot.cannonAbsoluteAngle);
 
         // log end
         log.debug('end');
@@ -201,6 +201,7 @@ var toolkit = toolkit || {};
       }
       return upper >= target && lower <= target;
     };
+
   })(toolkit.ns('utils'));
 
   (function(logger) {
@@ -522,7 +523,6 @@ Robot.prototype.onIdle = function(ev) {
       log.debug('robot found');
       var targetPos = marker.robot.position;
       command.turnCannonToDest(robot, targetPos);
-      return;
     }
     return;
   }
@@ -534,27 +534,27 @@ Robot.prototype.onIdle = function(ev) {
     command.turnCannonToDest(robot, targetPos);
   } else {
     // TODO: define cannon rotate range min max, by position
-    var position = robot.position;
-    if (position.x < 20) {
-      log.debug('near left side wall', robot.angle, robot.cannonAbsoluteAngle);
-      command.turnCannonTo(robot, 180);
-      command.turnTo(robot, 0);
-    } else if (robot.arenaWidth - position.x < 20) {
-      log.debug('near right side wall', robot.angle, robot.cannonAbsoluteAngle);
-      command.turnCannonTo(robot, 0);
-      command.turnTo(robot, 180);
-    } else if (robot.y < 20) {
-      log.debug('near top side wall', robot.angle, robot.cannonAbsoluteAngle);
-      command.turnCannonTo(robot, 90);
-      command.turnTo(robot, 90);
-    } else if (robot.arenaHeight - robot.y < 20) {
-      log.debug('near bottom side wall', robot.angle, robot.cannonAbsoluteAngle);
-      command.turnCannonTo(robot, 270);
-      command.turnTo(robot, 270);
-    } else {
+    // var position = robot.position;
+    // if (position.x < 20) {
+    //   log.debug('near left side wall', robot.angle, robot.cannonAbsoluteAngle);
+    //   command.turnCannonTo(robot, 180);
+    //   command.turnTo(robot, 0);
+    // } else if (robot.arenaWidth - position.x < 20) {
+    //   log.debug('near right side wall', robot.angle, robot.cannonAbsoluteAngle);
+    //   command.turnCannonTo(robot, 0);
+    //   command.turnTo(robot, 180);
+    // } else if (robot.y < 20) {
+    //   log.debug('near top side wall', robot.angle, robot.cannonAbsoluteAngle);
+    //   command.turnCannonTo(robot, 90);
+    //   command.turnTo(robot, 90);
+    // } else if (robot.arenaHeight - robot.y < 20) {
+    //   log.debug('near bottom side wall', robot.angle, robot.cannonAbsoluteAngle);
+    //   command.turnCannonTo(robot, 270);
+    //   command.turnTo(robot, 270);
+    // } else {
       robot.move(10, sts.direction);
       robot.rotateCannon(5 * sts.direction);
-    }
+    // }
   }
 };
 
@@ -598,6 +598,7 @@ Robot.prototype.onScannedRobot = function(ev) {
     var angle = utils.calculateCannonAngle(dest, targetPos);
     robot.move(10, sts.direction);
     command.turnCannonTo(robot, angle);
+    robot.fire();
   } else {
     robot.fire();
     var relativeAngle = utils.deltaAngle(robot.angle, robot.cannonAbsoluteAngle);
@@ -666,19 +667,28 @@ Robot.prototype.onHitByBullet = function(ev) {
 
 Robot.prototype.onWallCollision = function(ev) {
   var radar = toolkit.ns('radar'),
+      utils = toolkit.ns('utils'),
       command = toolkit.ns('command'),
       log = toolkit.getLogger('Robot.onWallCollision', robot);
 
   var robot = ev.robot;
   var sts = toolkit.getStatus(robot.id);
 
-  log.debug('angle', robot.angle, 'bearing', ev.bearing, 'direction', sts.direction);
-  if (!sts.robotFound) {
-    robot.turn(90);
-    robot.move(10, sts.direction);
+  var turnDegrees;
+  if (Math.abs(ev.bearing) > 90) {
+    turnDegrees = (180 - Math.abs(ev.bearing)) * 2;
+    if (ev.bearing > 0) {
+      turnDegrees *= -1;
+    }
   } else {
-    robot.turn(ev.bearing);
-    command.turnCannonTo(robot, -ev.bearing);
-    sts.reverseDirection();
+    turnDegrees = ev.bearing * 2;
   }
+  log.debug('angle', robot.angle, 'bearing', ev.bearing, 'direction', sts.direction, 'turnDegrees', turnDegrees);
+  // robot.move(5, sts.direction * -1);
+  robot.turn(turnDegrees);
+  if (sts.robotFound) {
+    robot.rotateCannon(-turnDegrees);
+  }
+  sts.reverseDirection();
+  robot.move(10, sts.direction);
 };
