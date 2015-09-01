@@ -36,8 +36,10 @@ var toolkit = toolkit || {};
 
         var log = toolkit.getLogger('Robot.' + event);
 
+        var robot = ev.robot;
+
         // log start
-        log.debug('start');
+        log.debug('start', robot.id);
 
         // call original handler
         try {
@@ -47,11 +49,10 @@ var toolkit = toolkit || {};
           log.error('catch error:', message);
         }
 
-        var robot = ev.robot;
-        log.debug(robot.id, robot.position, robot.angle, robot.cannonAbsoluteAngle);
+        log.debug(robot.position, robot.angle, robot.cannonAbsoluteAngle);
 
         // log end
-        log.debug('end');
+        log.debug('end', robot.id);
 
         // flush log
         toolkit.ns('logger').flush(ev.robot);
@@ -193,7 +194,7 @@ var toolkit = toolkit || {};
     };
 
     utils.inFuzzyAngle = function(target, median, accuracy) {
-      //TODO bad implements.
+      //FIXME bad implements.
       accuracy = accuracy || 10;
       var upper = median + accuracy;
       var lower = median - accuracy;
