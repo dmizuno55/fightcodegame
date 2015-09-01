@@ -193,15 +193,30 @@ var toolkit = toolkit || {};
     };
 
     utils.inFuzzyAngle = function(target, median, accuracy) {
+      //TODO bad implements.
       accuracy = accuracy || 10;
       var upper = median + accuracy;
       var lower = median - accuracy;
       if (lower < 0) {
         target = target > upper ? target - 360 : target;
       }
-      return upper >= target && lower <= target;
+      return utils.inRangeOfAngle(target, lower, upper);
     };
 
+    utils.convertToCannonAngle = function(angle) {
+      var cannonAngle = angle + 90;
+      if (cannonAngle >= 360) {
+        cannonAngle -= 360;
+      }
+      return cannonAngle;
+    };
+
+    utils.inRangeOfAngle = function(angle, lower, upper) {
+      if (lower > upper) {
+        upper += 360;
+      }
+      return upper >= angle && lower <= angle;
+    }
   })(toolkit.ns('utils'));
 
   (function(logger) {
@@ -282,6 +297,7 @@ var toolkit = toolkit || {};
       this.idleCount = 0;
       this.direction = 1;
       this.initialized = false;
+      this.turnDirection = 1;
     }
     Status.prototype.init = function(conf) {
       conf = conf || {};

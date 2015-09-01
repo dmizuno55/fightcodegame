@@ -392,4 +392,25 @@ describe('utils', function() {
       assert(!utils.inFuzzyAngle(20, 0));
     });
   });
+
+  describe('convertToCannonAngle', function() {
+    it('if angle is 180, cannonAngle is 270', function() {
+      assert(utils.convertToCannonAngle(180) === 270);
+    });
+    it('if angle is 270, cannonAngle is 0', function() {
+      assert(utils.convertToCannonAngle(270) === 0);
+    });
+    it('if angle is 300, cannonAngle is 30', function() {
+      assert(utils.convertToCannonAngle(300) === 30);
+    });
+  });
+
+  describe('inRangeOfAngle', function() {
+    it('lower is lower than uppper', function() {
+      assert(utils.inRangeOfAngle(50, 40, 60));
+    });
+    it('lower is upper than uppper(over 360)', function() {
+      assert(utils.inRangeOfAngle(355, 350, 10));
+    });
+  });
 });
